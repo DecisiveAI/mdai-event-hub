@@ -17,14 +17,7 @@ const (
 )
 
 // WorkflowMap defines the mapping from event names to handler names
-type WorkflowMap map[string][]string
-
-// HandlerName is a string identifier for handlers
-type HandlerName string
-
-// SupportedHandlers is expected to be imported from another package
-// This is a placeholder for the actual handler map
-var SupportedHandlers map[string]func(*datacore.ValkeyAdapter, eventing.MdaiEvent)
+type WorkflowMap map[string][]HandlerName
 
 // GetCurrentWorkflowMap fetches the current workflow configuration
 // This function can be implemented to fetch configuration from wherever it's stored
@@ -76,7 +69,7 @@ func ProcessEvent(client valkey.Client, logger logr.Logger) eventing.HandlerInvo
 	}
 }
 
-func safeInvokeHandler(adapter *datacore.ValkeyAdapter, handlerName string, event eventing.MdaiEvent) error {
+func safeInvokeHandler(adapter *datacore.ValkeyAdapter, handlerName HandlerName, event eventing.MdaiEvent) error {
 	if handlerFn, exists := SupportedHandlers[handlerName]; exists {
 		handlerFn(adapter, event)
 		return nil
