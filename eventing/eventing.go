@@ -3,12 +3,11 @@ package eventing
 import (
 	"context"
 	"encoding/json"
+	"go.uber.org/zap"
 	"log"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-
-	"github.com/go-logr/logr"
 )
 
 func failOnError(err error, msg string) {
@@ -97,7 +96,7 @@ func (h *EventHub) PublishMessage(event MdaiEvent) error {
 }
 
 // StartListening starts listening for messages and processes them using the provided handler
-func (h *EventHub) StartListening(logger logr.Logger, invoker HandlerInvoker) error {
+func (h *EventHub) StartListening(logger *zap.Logger, invoker HandlerInvoker) error {
 	h.mu.Lock()
 	if h.isListening {
 		h.mu.Unlock()
@@ -124,22 +123,22 @@ func (h *EventHub) StartListening(logger logr.Logger, invoker HandlerInvoker) er
 
 	go func() {
 		for d := range msgs {
-			logger.V(1).Info("Received message", "size", len(d.Body))
+			logger.Info("Received message", zap.Int("size", len(d.Body)))
 
 			// Parse the message as MdaiEvent
 			var event MdaiEvent
 			if err := json.Unmarshal(d.Body, &event); err != nil {
-				logger.Error(err, "Failed to parse event", "body", string(d.Body))
+				logger.Error("Failed to parse event", zap.Error(err), zap.String("body", string(d.Body)))
 				continue
 			}
 
 			// Process the event with the provided handler
 			if err := invoker(event); err != nil {
-				logger.Error(err, "Failed to invoke event", "body", string(d.Body))
+				logger.Error("Failed to invoke event", zap.Error(err), zap.String("body", string(d.Body)))
 			}
 		}
 	}()
 
-	logger.Info("Listening for events", "queue", h.queueName)
+	logger.Info("Listening for events", zap.String("queue", h.queueName))
 	return nil
 }

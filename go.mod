@@ -7,13 +7,14 @@ require github.com/rabbitmq/amqp091-go v1.10.0
 require (
 	github.com/decisiveai/event-hub-poc v0.0.0-00010101000000-000000000000
 	github.com/decisiveai/mdai-data-core v0.1.0
-	github.com/go-logr/logr v1.4.2
 	github.com/valkey-io/valkey-go v1.0.57
+	go.uber.org/zap v1.27.0
 )
 
 require (
 	github.com/decisiveai/mdai-operator v0.1.11 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
+	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -21,6 +22,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.79.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.37.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
@@ -36,4 +38,8 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/decisiveai/event-hub-poc => ../event-hub-poc
+replace (
+	github.com/decisiveai/event-hub-poc => ../event-hub-poc
+	github.com/decisiveai/event-hub-poc/eventing => ../event-hub-poc/eventing
+	github.com/decisiveai/mdai-data-core => ../mdai-data-core
+)
