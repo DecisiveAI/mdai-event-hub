@@ -13,11 +13,6 @@ import (
 	"strings"
 )
 
-const (
-	valkeyEndpointEnvVarKey = "VALKEY_ENDPOINT"
-	valkeyPasswordEnvVarKey = "VALKEY_PASSWORD"
-)
-
 var (
 	logger *zap.Logger
 )
@@ -112,14 +107,14 @@ func main() {
 
 	// Set up valkey client
 	client, _ := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{getEnvVariableWithDefault(valkeyEndpointEnvVarKey, "")},
-		Password:    getEnvVariableWithDefault(valkeyPasswordEnvVarKey, ""),
+		InitAddress: []string{"mdai-valkey-primary.mdai.svc.cluster.local:6379"},
+		Password:    "abc",
 	})
 
 	// Create event hub
 	hub, err := eventing.NewEventHub("amqp://guest:guest@localhost:5672/", "mdai-events")
 	if err != nil {
-		log.Fatalf("Failed to create EventHub: %s", err)
+		log.Fatalf("Failed to create EventHub, test new image: %s", err)
 	}
 	defer hub.Close()
 

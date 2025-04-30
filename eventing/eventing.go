@@ -3,6 +3,7 @@ package eventing
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"go.uber.org/zap"
 	"log"
 	"time"
@@ -20,13 +21,13 @@ func failOnError(err error, msg string) {
 func NewEventHub(connectionString string, queueName string) (*EventHub, error) {
 	conn, err := amqp.Dial(connectionString)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to dial: %s", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
 		conn.Close()
-		return nil, err
+		return nil, fmt.Errorf("failed to open channel: %s", err)
 	}
 
 	q, err := ch.QueueDeclare(
@@ -40,7 +41,7 @@ func NewEventHub(connectionString string, queueName string) (*EventHub, error) {
 	if err != nil {
 		ch.Close()
 		conn.Close()
-		return nil, err
+		return nil, fmt.Errorf("failed to declare queue: %s", err)
 	}
 
 	return &EventHub{

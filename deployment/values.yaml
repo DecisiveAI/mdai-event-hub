@@ -1,0 +1,25 @@
+# Use to set a custom valkey audit stream expiration (MINID)
+# auditStreamExpiryMs: 3600000
+
+serviceAccount:
+  create: false
+  automount: true
+  annotations: {}
+  name: "mdai-operator-controller-manager"
+
+deployment:
+  namespace: mdai
+  name: event-hub-poc
+  replicas: 1
+  containerPort: 8082
+image:
+  repository: public.ecr.aws/p3k6k6h3/event-hub-poc
+  # tag: 0.0.1
+
+service:
+  namespace: mdai
+  name: event-hub-poc
+  replicas: 1
+  port: 8082
+  targetPort: 8082
+  type: ClusterIP
