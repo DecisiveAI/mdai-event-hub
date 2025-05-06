@@ -8,7 +8,6 @@ import (
 	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"log"
 	"os"
 	"strings"
 )
@@ -87,7 +86,8 @@ func ProcessEvent(client valkey.Client, logger *zap.Logger) eventing.HandlerInvo
 		}
 
 		if !workflowFound {
-			return fmt.Errorf("No configured automation for event", "name", event.Name)
+			logger.Warn("No configured automation for event", zap.String("name", event.Name))
+			return nil // Don't treat this as an error, just log a warning
 		}
 		return nil
 	}
@@ -109,25 +109,38 @@ func getEnvVariableWithDefault(key, defaultValue string) string {
 }
 
 func main() {
+	logger.Info("Starting event-hub-poc service")
 
 	// Set up valkey client
-	client, _ := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{getEnvVariableWithDefault(valkeyEndpointEnvVarKey, "")},
-		Password:    getEnvVariableWithDefault(valkeyPasswordEnvVarKey, ""),
+	client, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{getEnvVariableWithDefault("VALKEY_ADDRESS", "mdai-valkey-primary.mdai.svc.cluster.local:6379")},
+		Password:    getEnvVariableWithDefault("VALKEY_PASSWORD", "abc"),
 	})
+	if err != nil {
+		logger.Fatal("Failed to create Valkey client", zap.Error(err))
+	}
 
 	// Create event hub
 	rmqEndpoint := getEnvVariableWithDefault(rabbitmqEndpointEnvVarKey, "")
 	rmqPassword := getEnvVariableWithDefault(rabbitmqPasswordEnvVarKey, "")
-	hub, err := eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", "mdai-events")
+
+	// Log connection parameters (but mask the password)
+	logger.Info("Connecting to RabbitMQ",
+		zap.String("endpoint", rmqEndpoint),
+		zap.String("queue", "mdai-events"))
+
+	hub, err := eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", "mdai-events", logger)
 	if err != nil {
-		log.Fatalf("Failed to create EventHub: %s", err)
+		logger.Fatal("Failed to create EventHub", zap.Error(err))
 	}
 	defer hub.Close()
 
-	// Start listening for events
-	err = hub.StartListening(logger, ProcessEvent(client, logger))
+	// Start listening and block until termination signal
+	// This handles all the signal processing internally
+	err = hub.ListenUntilSignal(ProcessEvent(client, logger))
 	if err != nil {
-		log.Fatalf("Failed to start listening: %s", err)
+		logger.Fatal("Failed to start event listener", zap.Error(err))
 	}
+
+	logger.Info("Service shutting down")
 }
