@@ -1,11 +1,10 @@
-module mdai-event-hub-poc
+module github.com/decisiveai/event-hub-poc
 
 go 1.23.4
 
 require github.com/rabbitmq/amqp091-go v1.10.0
 
 require (
-	github.com/decisiveai/event-hub-poc v0.0.0-00010101000000-000000000000
 	github.com/decisiveai/mdai-data-core v0.1.0
 	github.com/valkey-io/valkey-go v1.0.57
 	go.uber.org/zap v1.27.0
@@ -38,8 +37,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace (
-	github.com/decisiveai/event-hub-poc => ../event-hub-poc
-	github.com/decisiveai/event-hub-poc/eventing => ../event-hub-poc/eventing
-	github.com/decisiveai/mdai-data-core => ../mdai-data-core
-)
+replace github.com/decisiveai/mdai-data-core => ../mdai-data-core

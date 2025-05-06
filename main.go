@@ -17,6 +17,11 @@ var (
 	logger *zap.Logger
 )
 
+const (
+	rabbitmqEndpointEnvVarKey = "RABBITMQ_ENDPOINT"
+	rabbitmqPasswordEnvVarKey = "RABBITMQ_PASSWORD"
+)
+
 func init() {
 	// Define custom encoder configuration
 	encoderConfig := zap.NewProductionEncoderConfig()
@@ -107,14 +112,16 @@ func main() {
 
 	// Set up valkey client
 	client, _ := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{"mdai-valkey-primary.mdai.svc.cluster.local:6379"},
-		Password:    "abc",
+		InitAddress: []string{getEnvVariableWithDefault(valkeyEndpointEnvVarKey, "")},
+		Password:    getEnvVariableWithDefault(valkeyPasswordEnvVarKey, ""),
 	})
 
 	// Create event hub
-	hub, err := eventing.NewEventHub("amqp://guest:guest@localhost:5672/", "mdai-events")
+	rmqEndpoint := getEnvVariableWithDefault(rabbitmqEndpointEnvVarKey, "")
+	rmqPassword := getEnvVariableWithDefault(rabbitmqPasswordEnvVarKey, "")
+	hub, err := eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", "mdai-events")
 	if err != nil {
-		log.Fatalf("Failed to create EventHub, test new image: %s", err)
+		log.Fatalf("Failed to create EventHub: %s", err)
 	}
 	defer hub.Close()
 

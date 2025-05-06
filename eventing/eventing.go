@@ -21,13 +21,13 @@ func failOnError(err error, msg string) {
 func NewEventHub(connectionString string, queueName string) (*EventHub, error) {
 	conn, err := amqp.Dial(connectionString)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial: %s", err)
+		return nil, fmt.Errorf("failed to dial: %w", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("failed to open channel: %s", err)
+		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
 
 	q, err := ch.QueueDeclare(
@@ -41,7 +41,7 @@ func NewEventHub(connectionString string, queueName string) (*EventHub, error) {
 	if err != nil {
 		ch.Close()
 		conn.Close()
-		return nil, fmt.Errorf("failed to declare queue: %s", err)
+		return nil, fmt.Errorf("failed to declare queue: %w", err)
 	}
 
 	return &EventHub{
