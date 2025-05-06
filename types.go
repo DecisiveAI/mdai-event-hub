@@ -7,6 +7,6 @@ import (
 
 type HandlerName string
 
-type HandlerFunc func(*datacore.ValkeyAdapter, eventing.MdaiEvent)
+type HandlerFunc func(*datacore.ValkeyAdapter, eventing.MdaiEvent) error
 
 type HandlerMap map[HandlerName]HandlerFunc

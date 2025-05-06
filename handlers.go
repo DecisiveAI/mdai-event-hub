@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"github.com/decisiveai/event-hub-poc/eventing"
 	datacore "github.com/decisiveai/mdai-data-core/variables"
-	"log"
 )
 
 const (
-	HandleAddNoisyServiceToSet      HandlerName = "noisyServiceAlert.firing"
-	HandleRemoveNoisyServiceFromSet HandlerName = "noisyServiceAlert.resolved"
-	HandleNoisyServiceAlert         HandlerName = "noisyServiceAlert"
+	HandleAddNoisyServiceToSet      HandlerName = "HandleAddNoisyServiceToSet"
+	HandleRemoveNoisyServiceFromSet HandlerName = "HandleRemoveNoisyServiceFromSet"
+	HandleNoisyServiceAlert         HandlerName = "HandleNoisyServiceAlert"
 )
 
 // SupportedHandlers Go doesn't support dynamic accessing of exports. So this is a workaround.
@@ -35,11 +34,10 @@ func processEventPayload(event eventing.MdaiEvent) (map[string]interface{}, erro
 	return payloadData, nil
 }
 
-func handleNoisyServiceList(adapter *datacore.ValkeyAdapter, event eventing.MdaiEvent) {
+func handleNoisyServiceList(adapter *datacore.ValkeyAdapter, event eventing.MdaiEvent) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
-		// TODO: Wire up logger
-		log.Fatal("failed to process payload: %w", err)
+		return fmt.Errorf("failed to process payload: %w", err)
 	}
 	serviceName := payloadData["service_name"].(string)
 	status := payloadData["status"].(string)
@@ -53,15 +51,15 @@ func handleNoisyServiceList(adapter *datacore.ValkeyAdapter, event eventing.Mdai
 	} else if status == "resolved" {
 		adapter.RemoveElementFromSet(valkeyKey, serviceName)
 	} else {
-		log.Fatal("unknown alert status")
+		return fmt.Errorf("unknown alert status: %w", status)
 	}
+	return nil
 }
 
-func handleAddNoisyServiceToSet(adapter *datacore.ValkeyAdapter, event eventing.MdaiEvent) {
+func handleAddNoisyServiceToSet(adapter *datacore.ValkeyAdapter, event eventing.MdaiEvent) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
-		// TODO: Wire up logger
-		log.Fatal("failed to process payload: %w", err)
+		return fmt.Errorf("failed to process payload: %w", err)
 	}
 	serviceName := payloadData["service_name"].(string)
 
@@ -70,17 +68,19 @@ func handleAddNoisyServiceToSet(adapter *datacore.ValkeyAdapter, event eventing.
 	valkeyKey := datacore.ComposeValkeyKey(hubName, "service_list")
 
 	adapter.AddElementToSet(valkeyKey, serviceName)
+
+	return nil
 }
 
-func handleRemoveNoisyServiceFromSet(adapter *datacore.ValkeyAdapter, event eventing.MdaiEvent) {
+func handleRemoveNoisyServiceFromSet(adapter *datacore.ValkeyAdapter, event eventing.MdaiEvent) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
-		// TODO: Wire up logger
-		log.Fatal("failed to process payload: %w", err)
+		return fmt.Errorf("failed to process payload: %w", err)
 	}
 	serviceName := payloadData["service_name"].(string)
 	hubName := payloadData["hubName"].(string)
 	valkeyKey := datacore.ComposeValkeyKey(hubName, "service_list")
 
 	adapter.RemoveElementFromSet(valkeyKey, serviceName)
+	return nil
 }

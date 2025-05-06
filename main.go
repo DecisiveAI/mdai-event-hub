@@ -47,8 +47,8 @@ type WorkflowMap map[string][]HandlerName
 func GetCurrentWorkflowMap() WorkflowMap {
 	// In a real implementation, this could fetch from Kubernetes ConfigMap, etc.
 	return WorkflowMap{
-		"NoisyServiceFired":    {"HandleAddNoisyServiceToSet"},
-		"NoisyServiceResolved": {"HandleRemoveNoisyServiceFromSet"},
+		"NoisyServiceFired":    {HandleAddNoisyServiceToSet},
+		"NoisyServiceResolved": {HandleRemoveNoisyServiceFromSet},
 	}
 }
 
@@ -95,7 +95,10 @@ func ProcessEvent(client valkey.Client, logger *zap.Logger) eventing.HandlerInvo
 
 func safeInvokeHandler(adapter *datacore.ValkeyAdapter, handlerName HandlerName, event eventing.MdaiEvent) error {
 	if handlerFn, exists := SupportedHandlers[handlerName]; exists {
-		handlerFn(adapter, event)
+		err := handlerFn(adapter, event)
+		if err != nil {
+			return fmt.Errorf("handler %s failed: %w", handlerName, err)
+		}
 		return nil
 	}
 	return fmt.Errorf("handler %s not supported", handlerName)
