@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/decisiveai/event-hub-poc/eventing"
 	datacore "github.com/decisiveai/mdai-data-core/variables"
+	"time"
+
+	"github.com/cenkalti/backoff/v5"
 
 	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
@@ -19,6 +23,11 @@ var (
 const (
 	rabbitmqEndpointEnvVarKey = "RABBITMQ_ENDPOINT"
 	rabbitmqPasswordEnvVarKey = "RABBITMQ_PASSWORD"
+
+	valkeyEndpointEnvVarKey = "VALKEY_ENDPOINT"
+	valkeyPasswordEnvVarKey = "VALKEY_PASSWORD"
+
+	//hubNameEnvVarKey = "HUB_NAME"
 )
 
 func init() {
@@ -54,30 +63,35 @@ func GetCurrentWorkflowMap() WorkflowMap {
 
 // ProcessEvent handles an MdaiEvent according to configured workflows
 func ProcessEvent(client valkey.Client, logger *zap.Logger) eventing.HandlerInvoker {
-	dataAdapter := datacore.NewValkeyAdapter(client, logger)
+	//hubName := getEnvVariableWithDefault(hubNameEnvVarKey, "mdaihub-sample")
+	dataAdapter := datacore.NewValkeyAdapter(client, logger, "mdaihub-sample")
 
+	mdaiInterface := MdaiInterface{
+		Datacore: dataAdapter,
+		Logger:   logger,
+	}
+	dataAdapter.Logger.Info("DataAdapter initialized")
 	return func(event eventing.MdaiEvent) error {
 		// Get the current workflow configuration
 		workflowMap := GetCurrentWorkflowMap()
 
 		var workflowFound bool = false
-
+		logger.Info(fmt.Sprintf("Processing event %s", event.Name))
 		// Match on whole name, e.g. "NoisyServiceAlert.firing"
 		if workflow, exists := workflowMap[event.Name]; exists {
 			workflowFound = true
 			for _, handlerName := range workflow {
-				err := safeInvokeHandler(dataAdapter, handlerName, event)
+				err := safeInvokeHandler(mdaiInterface, handlerName, event)
 				if err != nil {
 					return err
 				}
 			}
 			// Match on alert name regardless of status, e.g. NoisyServiceAlert
-		}
-		if nameparts := strings.Split(event.Name, "."); len(nameparts) > 0 {
+		} else if nameparts := strings.Split(event.Name, "."); len(nameparts) > 0 {
 			if workflow, exists := workflowMap[nameparts[0]]; exists {
 				workflowFound = true
 				for _, handlerName := range workflow {
-					err := safeInvokeHandler(dataAdapter, handlerName, event)
+					err := safeInvokeHandler(mdaiInterface, handlerName, event)
 					if err != nil {
 						return err
 					}
@@ -86,16 +100,16 @@ func ProcessEvent(client valkey.Client, logger *zap.Logger) eventing.HandlerInvo
 		}
 
 		if !workflowFound {
-			logger.Warn("No configured automation for event", zap.String("name", event.Name))
+			logger.Info("No configured automation for event", zap.String("name", event.Name))
 			return nil // Don't treat this as an error, just log a warning
 		}
 		return nil
 	}
 }
 
-func safeInvokeHandler(adapter *datacore.ValkeyAdapter, handlerName HandlerName, event eventing.MdaiEvent) error {
+func safeInvokeHandler(mdai MdaiInterface, handlerName HandlerName, event eventing.MdaiEvent) error {
 	if handlerFn, exists := SupportedHandlers[handlerName]; exists {
-		err := handlerFn(adapter, event)
+		err := handlerFn(mdai, event)
 		if err != nil {
 			return fmt.Errorf("handler %s failed: %w", handlerName, err)
 		}
@@ -112,15 +126,42 @@ func getEnvVariableWithDefault(key, defaultValue string) string {
 }
 
 func main() {
-	logger.Info("Starting event-hub-poc service")
 
-	// Set up valkey client
-	client, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{getEnvVariableWithDefault("VALKEY_ADDRESS", "mdai-valkey-primary.mdai.svc.cluster.local:6379")},
-		Password:    getEnvVariableWithDefault("VALKEY_PASSWORD", "abc"),
-	})
-	if err != nil {
-		logger.Fatal("Failed to create Valkey client", zap.Error(err))
+	var (
+		valkeyClient valkey.Client
+		retryCount   int
+	)
+
+	ctx := context.Background()
+
+	operation := func() (string, error) {
+		var err error
+		valKeyEndpoint := getEnvVariableWithDefault(valkeyEndpointEnvVarKey, "")
+		valkeyPassword := getEnvVariableWithDefault(valkeyPasswordEnvVarKey, "")
+
+		valkeyClient, err = valkey.NewClient(valkey.ClientOption{
+			InitAddress: []string{valKeyEndpoint},
+			Password:    valkeyPassword,
+		})
+		if err != nil {
+			retryCount++
+			return "", err
+		}
+		logger.Info(fmt.Sprintf("Initializing valkey client with endpoint %s", valKeyEndpoint))
+		return "", nil
+	}
+	exponentialBackoff := backoff.NewExponentialBackOff()
+	exponentialBackoff.InitialInterval = 5 * time.Second
+
+	notifyFunc := func(err error, duration time.Duration) {
+		logger.Error("failed to initialize valkey client. retrying...", zap.Int("retry_count", retryCount), zap.Duration("duration", duration))
+	}
+
+	if _, err := backoff.Retry(ctx, operation,
+		backoff.WithBackOff(backoff.NewExponentialBackOff()),
+		backoff.WithMaxElapsedTime(3*time.Minute),
+		backoff.WithNotify(notifyFunc)); err != nil {
+		logger.Fatal("failed to get valkey client", zap.Error(err))
 	}
 
 	// Create event hub
@@ -140,7 +181,7 @@ func main() {
 
 	// Start listening and block until termination signal
 	// This handles all the signal processing internally
-	err = hub.ListenUntilSignal(ProcessEvent(client, logger))
+	err = hub.ListenUntilSignal(ProcessEvent(valkeyClient, logger))
 	if err != nil {
 		logger.Fatal("Failed to start event listener", zap.Error(err))
 	}

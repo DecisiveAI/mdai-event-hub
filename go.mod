@@ -5,6 +5,7 @@ go 1.23.4
 require github.com/rabbitmq/amqp091-go v1.10.0
 
 require (
+	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/decisiveai/mdai-data-core v0.1.0
 	github.com/valkey-io/valkey-go v1.0.57
 	go.uber.org/zap v1.27.0

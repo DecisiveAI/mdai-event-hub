@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/decisiveai/event-hub-poc/eventing"
-	datacore "github.com/decisiveai/mdai-data-core/variables"
+	"go.uber.org/zap"
 )
 
 const (
@@ -34,7 +34,7 @@ func processEventPayload(event eventing.MdaiEvent) (map[string]interface{}, erro
 	return payloadData, nil
 }
 
-func handleNoisyServiceList(adapter *datacore.ValkeyAdapter, event eventing.MdaiEvent) error {
+func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
@@ -42,45 +42,36 @@ func handleNoisyServiceList(adapter *datacore.ValkeyAdapter, event eventing.Mdai
 	serviceName := payloadData["service_name"].(string)
 	status := payloadData["status"].(string)
 
-	hubName := payloadData["hubName"].(string)
-
-	valkeyKey := datacore.ComposeValkeyKey(hubName, "service_list")
-
 	if status == "firing" {
-		adapter.AddElementToSet(valkeyKey, serviceName)
+		mdai.Datacore.AddElementToSet("service_list", serviceName)
 	} else if status == "resolved" {
-		adapter.RemoveElementFromSet(valkeyKey, serviceName)
+		mdai.Datacore.RemoveElementFromSet("service_list", serviceName)
 	} else {
 		return fmt.Errorf("unknown alert status: %w", status)
 	}
 	return nil
 }
 
-func handleAddNoisyServiceToSet(adapter *datacore.ValkeyAdapter, event eventing.MdaiEvent) error {
+func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent) error {
 	payloadData, err := processEventPayload(event)
+	mdai.Logger.Info("payload data", zap.Any("payload", payloadData))
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
 	}
 	serviceName := payloadData["service_name"].(string)
 
-	hubName := payloadData["hubName"].(string)
-
-	valkeyKey := datacore.ComposeValkeyKey(hubName, "service_list")
-
-	adapter.AddElementToSet(valkeyKey, serviceName)
-
+	result := mdai.Datacore.AddElementToSet("service_list", serviceName)
+	mdai.Logger.Info("setter result ", zap.Any("result", result))
 	return nil
 }
 
-func handleRemoveNoisyServiceFromSet(adapter *datacore.ValkeyAdapter, event eventing.MdaiEvent) error {
+func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEvent) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
 	}
 	serviceName := payloadData["service_name"].(string)
-	hubName := payloadData["hubName"].(string)
-	valkeyKey := datacore.ComposeValkeyKey(hubName, "service_list")
 
-	adapter.RemoveElementFromSet(valkeyKey, serviceName)
+	mdai.Datacore.RemoveElementFromSet("service_list", serviceName)
 	return nil
 }
