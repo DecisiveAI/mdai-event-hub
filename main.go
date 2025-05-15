@@ -62,9 +62,9 @@ func GetCurrentWorkflowMap() WorkflowMap {
 }
 
 // ProcessEvent handles an MdaiEvent according to configured workflows
-func ProcessEvent(client valkey.Client, logger *zap.Logger) eventing.HandlerInvoker {
+func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger) eventing.HandlerInvoker {
 	//hubName := getEnvVariableWithDefault(hubNameEnvVarKey, "mdaihub-sample")
-	dataAdapter := datacore.NewValkeyAdapter(client, logger, "mdaihub-sample")
+	dataAdapter := datacore.NewValkeyAdapter(ctx, client, logger, "mdaihub-sample")
 
 	mdaiInterface := MdaiInterface{
 		Datacore: dataAdapter,
@@ -181,7 +181,7 @@ func main() {
 
 	// Start listening and block until termination signal
 	// This handles all the signal processing internally
-	err = hub.ListenUntilSignal(ProcessEvent(valkeyClient, logger))
+	err = hub.ListenUntilSignal(ProcessEvent(ctx, valkeyClient, logger))
 	if err != nil {
 		logger.Fatal("Failed to start event listener", zap.Error(err))
 	}
