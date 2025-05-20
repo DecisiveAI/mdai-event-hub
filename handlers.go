@@ -14,7 +14,7 @@ const (
 )
 
 // SupportedHandlers Go doesn't support dynamic accessing of exports. So this is a workaround.
-// The handler library will have to export a map that can by dynamically accessed.
+// The handler library will have to export a map that can be dynamically accessed.
 // To enforce this, handlers are declared with a lower case first character so they
 // are not exported directly but can only be accessed through the map
 var SupportedHandlers = HandlerMap{
@@ -34,44 +34,70 @@ func processEventPayload(event eventing.MdaiEvent) (map[string]interface{}, erro
 	return payloadData, nil
 }
 
-func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent) error {
+func getArgsValueWithDefault(key string, defaultValue string, args map[string]string) string {
+	if val, ok := args[key]; ok {
+		return val
+	}
+	return defaultValue
+}
+
+func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
 	}
-	serviceName := payloadData["service_name"].(string)
-	status := payloadData["status"].(string)
+	mdai.Logger.Debug("handleNoisyServiceList ", zap.Any("event", event), zap.Any("payload", payloadData), zap.Any("args", args))
 
-	if status == "firing" {
-		mdai.Datacore.AddElementToSet("service_list", serviceName)
-	} else if status == "resolved" {
-		mdai.Datacore.RemoveElementFromSet("service_list", serviceName)
+	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
+	payloadComparableKey := getArgsValueWithDefault("payload_comparable_ref", "status", args)
+	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
+
+	comp := payloadData[payloadComparableKey].(string)
+
+	payloadValue := payloadData[payloadValueKey].(string)
+
+	if comp == "firing" {
+		mdai.Datacore.AddElementToSet(variableRef, payloadValue)
+	} else if comp == "resolved" {
+		mdai.Datacore.RemoveElementFromSet(variableRef, payloadValue)
 	} else {
-		return fmt.Errorf("unknown alert status: %w", status)
+		return fmt.Errorf("unknown alert status: %w", comp)
 	}
 	return nil
 }
 
-func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent) error {
+func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
 	payloadData, err := processEventPayload(event)
-	mdai.Logger.Info("payload data", zap.Any("payload", payloadData))
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
 	}
-	serviceName := payloadData["service_name"].(string)
+	mdai.Logger.Debug("handleAddNoisyServiceToSet ", zap.Any("event", event), zap.Any("payload", payloadData), zap.Any("args", args))
 
-	result := mdai.Datacore.AddElementToSet("service_list", serviceName)
-	mdai.Logger.Info("setter result ", zap.Any("result", result))
+	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
+	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
+
+	value := payloadData[payloadValueKey].(string)
+
+	mdai.Datacore.AddElementToSet(variableRef, value)
+	// TODO: Debug Log new var val
+
 	return nil
 }
 
-func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEvent) error {
+func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
 	}
-	serviceName := payloadData["service_name"].(string)
+	mdai.Logger.Debug("handleRemoveNoisyServiceFromSet ", zap.Any("event", event), zap.Any("payload", payloadData), zap.Any("args", args))
 
-	mdai.Datacore.RemoveElementFromSet("service_list", serviceName)
+	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
+	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
+
+	value := payloadData[payloadValueKey].(string)
+
+	mdai.Datacore.RemoveElementFromSet(variableRef, value)
+	// TODO: Debug Log new var val
+
 	return nil
 }

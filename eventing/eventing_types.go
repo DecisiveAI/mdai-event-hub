@@ -31,4 +31,5 @@ type MdaiEvent struct {
 	Payload       string    `json:"payload"`
 	Source        string    `json:"source"`
 	CorrelationId string    `json:"correlationId,omitempty"`
+	HubName       string    `json:"hubName,omitempty"`
 }

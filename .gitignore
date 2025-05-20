@@ -27,7 +27,7 @@ go.work.sum
 template
 build
 .secrets
-vendor
+vendor/
 .idea
 event-handler-webservice
 event-handler-webservice-*.tgz

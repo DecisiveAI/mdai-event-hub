@@ -13,6 +13,6 @@ type MdaiInterface struct {
 
 type HandlerName string
 
-type HandlerFunc func(MdaiInterface, eventing.MdaiEvent) error
+type HandlerFunc func(MdaiInterface, eventing.MdaiEvent, map[string]string) error
 
 type HandlerMap map[HandlerName]HandlerFunc
