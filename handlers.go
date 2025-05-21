@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -43,6 +44,7 @@ func getArgsValueWithDefault(key string, defaultValue string, args map[string]st
 }
 
 func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
+	ctx := context.Background()
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
@@ -58,9 +60,9 @@ func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args m
 	payloadValue := payloadData[payloadValueKey].(string)
 
 	if comp == "firing" {
-		mdai.Datacore.AddElementToSet(variableRef, payloadValue)
+		mdai.Datacore.AddElementToSet(ctx, variableRef, payloadValue) // Fixme error handling
 	} else if comp == "resolved" {
-		mdai.Datacore.RemoveElementFromSet(variableRef, payloadValue)
+		mdai.Datacore.RemoveElementFromSet(ctx, variableRef, payloadValue)
 	} else {
 		return fmt.Errorf("unknown alert status: %w", comp)
 	}
@@ -68,6 +70,7 @@ func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args m
 }
 
 func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
+	ctx := context.Background()
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
@@ -79,13 +82,14 @@ func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent, ar
 
 	value := payloadData[payloadValueKey].(string)
 
-	mdai.Datacore.AddElementToSet(variableRef, value)
+	mdai.Datacore.AddElementToSet(ctx, variableRef, value)
 	// TODO: Debug Log new var val
 
 	return nil
 }
 
 func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
+	ctx := context.Background()
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
@@ -97,7 +101,7 @@ func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEven
 
 	value := payloadData[payloadValueKey].(string)
 
-	mdai.Datacore.RemoveElementFromSet(variableRef, value)
+	mdai.Datacore.RemoveElementFromSet(ctx, variableRef, value)
 	// TODO: Debug Log new var val
 
 	return nil

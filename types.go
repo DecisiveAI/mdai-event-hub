@@ -2,13 +2,13 @@ package main
 
 import (
 	"github.com/decisiveai/event-hub-poc/eventing"
-	datacore "github.com/decisiveai/mdai-data-core/variables"
+	datacore "github.com/decisiveai/mdai-data-core/handlers"
 	"go.uber.org/zap"
 )
 
 type MdaiInterface struct {
 	Logger   *zap.Logger
-	Datacore *datacore.ValkeyAdapter
+	Datacore *datacore.HandlerAdapter
 }
 
 type HandlerName string
