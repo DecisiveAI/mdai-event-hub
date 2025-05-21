@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/decisiveai/event-hub-poc/eventing"
-	datacore "github.com/decisiveai/mdai-data-core/variables"
-	v1 "github.com/decisiveai/mdai-operator/api/v1"
 	"log"
 
-	"github.com/cenkalti/backoff/v5"
+	"github.com/decisiveai/event-hub-poc/eventing"
+	datacore "github.com/decisiveai/mdai-data-core/handlers"
+	v1 "github.com/decisiveai/mdai-operator/api/v1"
 
 	"os"
 	"strings"
@@ -55,7 +54,7 @@ func init() {
 
 // ProcessEvent handles an MdaiEvent according to configured workflows
 func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger) eventing.HandlerInvoker {
-	dataAdapter := datacore.NewValkeyAdapter(client, zapr.NewLogger(logger), "foo") // TODO: included "foo" to satisfy linter. Pattern will go away once data core is updated
+	dataAdapter := datacore.NewHandlerAdapter(client, zapr.NewLogger(logger), "foo") // FIXME: included "foo" to satisfy linter. Pattern will go away once data core is updated
 
 	mdaiInterface := MdaiInterface{
 		Datacore: dataAdapter,
@@ -116,6 +115,7 @@ func safePerformAutomationStep(mdai MdaiInterface, autoStep v1.AutomationStep, e
 	handlerName := HandlerName(autoStep.HandlerRef)
 
 	if handlerFn, exists := SupportedHandlers[handlerName]; exists {
+		// TODO add event audit here
 		err := handlerFn(mdai, event, args)
 		if err != nil {
 			return fmt.Errorf("handler %s failed: %w", handlerName, err)
@@ -190,10 +190,10 @@ func initEventHub(ctx context.Context, logger *zap.Logger) (*eventing.EventHub, 
 	// Log connection parameters (but mask the password)
 	logger.Info("Connecting to RabbitMQ",
 		zap.String("endpoint", rmqEndpoint),
-		zap.String("queue", "mdai-events"))
+		zap.String("queue", eventing.EventQueueName))
 
 	initializer := func() (*eventing.EventHub, error) {
-		return eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", "mdai-events", logger)
+		return eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
 	}
 
 	return RetryInitializer(
