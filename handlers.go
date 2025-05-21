@@ -59,12 +59,17 @@ func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args m
 
 	payloadValue := payloadData[payloadValueKey].(string)
 
-	if comp == "firing" {
-		mdai.Datacore.AddElementToSet(ctx, variableRef, payloadValue) // Fixme error handling
-	} else if comp == "resolved" {
-		mdai.Datacore.RemoveElementFromSet(ctx, variableRef, payloadValue)
-	} else {
-		return fmt.Errorf("unknown alert status: %w", comp)
+	switch comp {
+	case "firing":
+		if err = mdai.Datacore.AddElementToSet(ctx, variableRef, payloadValue); err != nil {
+			return err
+		}
+	case "resolved":
+		if err = mdai.Datacore.RemoveElementFromSet(ctx, variableRef, payloadValue); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown alert status: %s", comp)
 	}
 	return nil
 }
