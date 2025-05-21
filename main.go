@@ -54,7 +54,7 @@ func init() {
 
 // ProcessEvent handles an MdaiEvent according to configured workflows
 func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger) eventing.HandlerInvoker {
-	dataAdapter := datacore.NewHandlerAdapter(client, zapr.NewLogger(logger), "foo") // FIXME: included "foo" to satisfy linter. Pattern will go away once data core is updated
+	dataAdapter := datacore.NewHandlerAdapter(client, zapr.NewLogger(logger))
 
 	mdaiInterface := MdaiInterface{
 		Datacore: dataAdapter,

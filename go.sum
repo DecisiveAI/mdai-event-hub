@@ -10,6 +10,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/decisiveai/mdai-data-core v0.1.4-0.20250521181925-1380cc16d59e h1:uK5M4KLPI2qnaseGi6vmVDaFCc+WmypF5yMqFuFjCkQ=
 github.com/decisiveai/mdai-data-core v0.1.4-0.20250521181925-1380cc16d59e/go.mod h1:HT9fPqLGr/RRODY/v60BVTNnyhNP28pdivE/NBrKuEg=
+github.com/decisiveai/mdai-data-core v0.1.4-0.20250521205927-0e4f719f9482 h1:LmNs7IuiNagS3me+ycFFCALdcOgTrbrG0lGpHk98H3U=
+github.com/decisiveai/mdai-data-core v0.1.4-0.20250521205927-0e4f719f9482/go.mod h1:HT9fPqLGr/RRODY/v60BVTNnyhNP28pdivE/NBrKuEg=
 github.com/decisiveai/mdai-operator v0.1.16-0.20250516185637-21a582cb1037 h1:4rIahkfbYsE8/68wwLadCLj58xxE3cu/CjR4zplUB0I=
 github.com/decisiveai/mdai-operator v0.1.16-0.20250516185637-21a582cb1037/go.mod h1:fES6mfCBQ8S06XafksVI0Tljyfo1FR1q1p02m8teRBg=
 github.com/emicklei/go-restful/v3 v3.12.1 h1:PJMDIM/ak7btuL8Ex0iYET9hxM3CI2sjZtzpL63nKAU=

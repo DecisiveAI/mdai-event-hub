@@ -61,11 +61,11 @@ func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args m
 
 	switch comp {
 	case "firing":
-		if err = mdai.Datacore.AddElementToSet(ctx, variableRef, payloadValue); err != nil {
+		if err = mdai.Datacore.AddElementToSet(ctx, variableRef, event.HubName, payloadValue); err != nil {
 			return err
 		}
 	case "resolved":
-		if err = mdai.Datacore.RemoveElementFromSet(ctx, variableRef, payloadValue); err != nil {
+		if err = mdai.Datacore.RemoveElementFromSet(ctx, variableRef, event.HubName, payloadValue); err != nil {
 			return err
 		}
 	default:
@@ -87,7 +87,9 @@ func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent, ar
 
 	value := payloadData[payloadValueKey].(string)
 
-	mdai.Datacore.AddElementToSet(ctx, variableRef, value)
+	if err := mdai.Datacore.AddElementToSet(ctx, variableRef, event.HubName, value); err != nil {
+		return err
+	}
 	// TODO: Debug Log new var val
 
 	return nil
@@ -106,7 +108,9 @@ func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEven
 
 	value := payloadData[payloadValueKey].(string)
 
-	mdai.Datacore.RemoveElementFromSet(ctx, variableRef, value)
+	if err := mdai.Datacore.RemoveElementFromSet(ctx, variableRef, event.HubName, value); err != nil {
+		return err
+	}
 	// TODO: Debug Log new var val
 
 	return nil

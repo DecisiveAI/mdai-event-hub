@@ -6,7 +6,7 @@ toolchain go1.24.3
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.2
-	github.com/decisiveai/mdai-data-core v0.1.4-0.20250521181925-1380cc16d59e
+	github.com/decisiveai/mdai-data-core v0.1.4-0.20250521205927-0e4f719f9482
 	github.com/decisiveai/mdai-operator v0.1.16-0.20250516185637-21a582cb1037
 	github.com/go-logr/zapr v1.3.0
 	github.com/rabbitmq/amqp091-go v1.10.0
