@@ -3,17 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/decisiveai/event-hub-poc/eventing"
 	datacore "github.com/decisiveai/mdai-data-core/variables"
 	v1 "github.com/decisiveai/mdai-operator/api/v1"
 	"log"
-	"time"
 
+	"github.com/cenkalti/backoff/v5"
+
+	"os"
+	"strings"
+
+	"github.com/go-logr/zapr"
 	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"os"
-	"strings"
 )
 
 var (
@@ -50,13 +55,12 @@ func init() {
 
 // ProcessEvent handles an MdaiEvent according to configured workflows
 func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger) eventing.HandlerInvoker {
-	dataAdapter := datacore.NewValkeyAdapter(ctx, client, logger, "foo") // TODO: included "foo" to satisfy linter. Pattern will go away once data core is updated
+	dataAdapter := datacore.NewValkeyAdapter(client, zapr.NewLogger(logger), "foo") // TODO: included "foo" to satisfy linter. Pattern will go away once data core is updated
 
 	mdaiInterface := MdaiInterface{
 		Datacore: dataAdapter,
 		Logger:   logger,
 	}
-	dataAdapter.Logger.Info("DataAdapter initialized")
 	return func(event eventing.MdaiEvent) error {
 
 		configMgr, err := NewConfigMapManager(automationConfigMapNamePostfix)
@@ -75,7 +79,7 @@ func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger)
 			return fmt.Errorf("error getting ConfigMap for hub %s: %v", event.HubName, err)
 		}
 
-		var workflowFound bool = false
+		var workflowFound = false
 		logger.Info(fmt.Sprintf("Processing event %s", event.Name))
 		// Match on whole name, e.g. "NoisyServiceAlert.firing"
 		if workflow, exists := workflowMap[event.Name]; exists {

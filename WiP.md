@@ -10,6 +10,7 @@
    2. Hard code set of handlers for updating vars "manually"
    3. {Stretch?} Determine method that allows users to configure which handler lib to use
 2. Fetch automation configs from however the `mdai-operator` conveys them
+   - expose config reload api and implement the logic for reload
 3. Retry logic for connecting to RabbitMQ
 4. Refactor/harden existing logic
 5. Logs for debugging/audit

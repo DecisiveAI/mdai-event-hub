@@ -4,14 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"go.uber.org/zap"
+
 	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+const (
+	EventQueueName = "mdai-events"
 )
 
 func failOnError(err error, msg string) {
