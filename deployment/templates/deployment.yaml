@@ -20,11 +20,6 @@ spec:
         ports:
         - containerPort: {{ .Values.deployment.containerPort }}
         env:
-        - name: HUB_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: {{ .Release.Name }}-config
-              key: crd-field-value
         - name: HTTP_PORT
           value: "{{ .Values.deployment.containerPort }}"
         - name: VALKEY_AUDIT_STREAM_EXPIRY_MS

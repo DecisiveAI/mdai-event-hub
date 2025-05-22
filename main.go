@@ -66,11 +66,11 @@ func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger)
 		if err != nil {
 			return fmt.Errorf("failed to create ConfigMap manager: %v", err)
 		}
-		log.Printf("Processing event for hub: %s", event.HubName)
 		hubName := event.HubName
 		if hubName == "" {
 			return fmt.Errorf("no hub name provided")
 		}
+		log.Printf("Processing event for hub: %s", event.HubName)
 
 		// Get ConfigMap data for this hub
 		workflowMap, err := configMgr.GetConfigMapForHub(ctx, event.HubName)
