@@ -231,7 +231,8 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 
 						h.logger.Info("Successfully processed event",
 							zap.String("eventId", event.Id),
-							zap.String("eventName", event.Name))
+							zap.String("eventName", event.Name),
+							zap.String("hubName", event.HubName))
 					}
 				}(d)
 			}

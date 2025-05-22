@@ -16,3 +16,5 @@
 5. Logs for debugging/audit
 3. Tests
 3. Version?
+4. Create a mock for eventing so it can be used in dependent projects for unit testing, for example event-handler-webserive
+5. Reconnect logic for RabbitMQ
