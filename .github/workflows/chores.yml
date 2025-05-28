@@ -311,7 +311,7 @@ jobs:
       - name: Capture coverage in health repo
         run: |
           go install github.com/axw/gocov/gocov@latest
-          gocov convert coverage.out | gocov report > coverage-event-hub-poc.txt
+          gocov convert coverage.out | gocov report > coverage-mdai-event-hub.txt
 
       - name: Generate a token
         id: generate-token
@@ -323,8 +323,8 @@ jobs:
       - name: Set safe git directory
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: git config --global --add safe.directory '*'
-
+        run: git config --global --add safe.directory '*
+'
       - name: Commit coverage to health repo
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
@@ -337,10 +337,10 @@ jobs:
           git config --global user.name "GitHub Action"
           
           # Copy the new coverage file
-          cp ../coverage-event-hub-poc.txt .
+          cp ../coverage-mdai-event-hub.txt .
           
           # Commit and push changes
-          git add coverage-event-hub-poc.txt
+          git add coverage-mdai-event-hub.txt
           if git diff --cached --quiet; then
             echo "✅ No changes to commit."
             exit 0

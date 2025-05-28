@@ -7,7 +7,7 @@ on:
       - 'v*'
 
 env:
-  IMAGE_NAME: event-hub-poc
+  IMAGE_NAME: mdai-event-hub
   TOKEN: ${{ secrets.TOKEN_OPERATOR }}
   GOPRIVATE: github.com/decisiveai/mdai-operator
 

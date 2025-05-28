@@ -4,4 +4,4 @@
 
 ## Install via Helm
 ```sh
-helm install event-handler oci://ghcr.io/decisiveai/event-hub-poc
+helm install event-handler oci://ghcr.io/decisiveai/mdai-event-hub
