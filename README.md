@@ -1,1 +1,1 @@
-# event-hub-poc
+# mdai-event-hub

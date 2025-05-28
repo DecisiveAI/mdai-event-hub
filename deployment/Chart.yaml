@@ -1,6 +1,6 @@
 apiVersion: v2
-name: event-hub-poc
-description: MyDecisive Event Hub POC helm charts
+name: mdai-event-hub
+description: MyDecisive Event Hub helm charts
 
 # A chart can be either an 'application' or a 'library' chart.
 #
