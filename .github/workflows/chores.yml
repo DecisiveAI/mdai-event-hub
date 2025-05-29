@@ -323,8 +323,7 @@ jobs:
       - name: Set safe git directory
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: git config --global --add safe.directory '*
-'
+        run: git config --global --add safe.directory '*'
       - name: Commit coverage to health repo
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
