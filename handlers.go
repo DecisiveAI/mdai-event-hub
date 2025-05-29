@@ -115,3 +115,60 @@ func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEven
 
 	return nil
 }
+
+func handleStaticVariablesActions(mdai MdaiInterface, event eventing.MdaiEvent) error {
+	ctx := context.Background()
+	var payloadObj eventing.StaticVariablesActionPayload
+	if err := json.Unmarshal([]byte(event.Payload), &payloadObj); err != nil {
+		return err
+	}
+	mdai.Logger.Info("Received static variable payload", zap.Any("Value", payloadObj.Value))
+	switch payloadObj.Type {
+	case "set":
+		{
+			if payloadObj.Operation == "add" {
+				values := payloadObj.Value.([]interface{})
+				for _, val := range values {
+					mdai.Logger.Info("Setting value", zap.String("Value", val.(string)))
+					if err := mdai.Datacore.AddElementToSet(ctx, payloadObj.Variable, event.HubName, val.(string)); err != nil {
+						return err
+					}
+				}
+			} else if payloadObj.Operation == "remove" {
+				values := payloadObj.Value.([]interface{})
+				for _, val := range values {
+					mdai.Logger.Info("Setting value", zap.String("Value", val.(string)))
+					if err := mdai.Datacore.RemoveElementFromSet(ctx, payloadObj.Variable, event.HubName, val.(string)); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	case "map":
+		{
+			if payloadObj.Operation == "add" {
+				values := payloadObj.Value.(map[string]interface{})
+				for key, val := range values {
+					mdai.Logger.Info("Setting value", zap.String("Field", key), zap.String("Value", val.(string)))
+					if err := mdai.Datacore.AddSetMapElement(ctx, payloadObj.Variable, event.HubName, key, val.(string)); err != nil {
+						return err
+					}
+				}
+			} else if payloadObj.Operation == "remove" {
+				values := payloadObj.Value.([]interface{})
+				for _, key := range values {
+					mdai.Logger.Info("Deleting  field", zap.String("Field", key.(string)))
+					if err := mdai.Datacore.RemoveElementFromMap(ctx, payloadObj.Variable, event.HubName, key.(string)); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	case "string", "int", "boolean":
+		{
+			mdai.Logger.Info("Variable type is not implemented", zap.Any("Type", payloadObj.Type))
+		}
+
+	}
+	return nil
+}

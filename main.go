@@ -26,12 +26,14 @@ var (
 
 const (
 	rabbitmqEndpointEnvVarKey = "RABBITMQ_ENDPOINT"
+	rabbitmqUserEnvVarKey     = "RABBITMQ_USER"
 	rabbitmqPasswordEnvVarKey = "RABBITMQ_PASSWORD"
 
 	valkeyEndpointEnvVarKey = "VALKEY_ENDPOINT"
 	valkeyPasswordEnvVarKey = "VALKEY_PASSWORD"
 
 	automationConfigMapNamePostfix = "-automation"
+	staticVariablesEventSource     = "static_variable_api"
 )
 
 func init() {
@@ -80,8 +82,11 @@ func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger)
 
 		var workflowFound = false
 		logger.Info(fmt.Sprintf("Processing event %s", event.Name))
-		// Match on whole name, e.g. "NoisyServiceAlert.firing"
-		if workflow, exists := workflowMap[event.Name]; exists {
+		// Handle static variables
+		if event.Source == staticVariablesEventSource {
+			_ = handleStaticVariablesActions(mdaiInterface, event)
+			// Match on whole name, e.g. "NoisyServiceAlert.firing"
+		} else if workflow, exists := workflowMap[event.Name]; exists {
 			workflowFound = true
 			for _, automationStep := range workflow {
 				err := safePerformAutomationStep(mdaiInterface, automationStep, event)
@@ -185,6 +190,7 @@ func initValKeyClient(ctx context.Context, logger *zap.Logger) (valkey.Client, e
 
 func initEventHub(ctx context.Context, logger *zap.Logger) (*eventing.EventHub, error) {
 	rmqEndpoint := getEnvVariableWithDefault(rabbitmqEndpointEnvVarKey, "")
+	rmqUser := getEnvVariableWithDefault(rabbitmqUserEnvVarKey, "")
 	rmqPassword := getEnvVariableWithDefault(rabbitmqPasswordEnvVarKey, "")
 
 	// Log connection parameters (but mask the password)
@@ -193,7 +199,7 @@ func initEventHub(ctx context.Context, logger *zap.Logger) (*eventing.EventHub, 
 		zap.String("queue", eventing.EventQueueName))
 
 	initializer := func() (*eventing.EventHub, error) {
-		return eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
+		return eventing.NewEventHub("amqp://"+rmqUser+":"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
 	}
 
 	return RetryInitializer(

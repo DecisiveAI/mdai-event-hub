@@ -1,10 +1,11 @@
 package eventing
 
 import (
-	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 	"sync"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 // HandlerInvoker is a function type that processes MdaiEvents
@@ -32,4 +33,13 @@ type MdaiEvent struct {
 	Source        string    `json:"source"`
 	CorrelationId string    `json:"correlationId,omitempty"`
 	HubName       string    `json:"hubName,omitempty"`
+}
+
+// StaticVariablesActionPayload represents a payload for static variables actions
+type StaticVariablesActionPayload struct {
+	Hub       string `json:"hub"`
+	Variable  string `json:"variable"`
+	Type      string `json:"type"`
+	Operation string `json:"operation"`
+	Value     any    `json:"value"`
 }

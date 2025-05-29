@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	v1 "github.com/decisiveai/mdai-operator/api/v1"
 	"log"
 	"os"
 	"sync"
 	"time"
+
+	v1 "github.com/decisiveai/mdai-operator/api/v1"
+	"go.uber.org/zap"
+	"k8s.io/client-go/tools/clientcmd"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,9 +45,24 @@ type ConfigMapFetcher struct {
 // NewConfigMapManager creates a new ConfigMapManager
 func NewConfigMapManager(suffix string) (*ConfigMapManager, error) {
 	// Create in-cluster config
+	//config, err := rest.InClusterConfig()
+	//if err != nil {
+	//	return nil, fmt.Errorf("failed to create in-cluster config: %v", err)
+	//}
+
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create in-cluster config: %v", err)
+		kubeconfig, err := os.UserHomeDir()
+		if err != nil {
+			logger.Error("Failed to load k8s config", zap.Error(err))
+			return nil, err
+		}
+
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig+"/.kube/config")
+		if err != nil {
+			logger.Error("Failed to build k8s config", zap.Error(err))
+			return nil, err
+		}
 	}
 
 	// Create clientset
