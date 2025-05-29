@@ -27,7 +27,9 @@ func NewEventHub(connectionString string, queueName string, logger *zap.Logger) 
 
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			logger.Error("Failed to close connection", zap.Error(closeErr))
+		}
 		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
 
@@ -40,8 +42,12 @@ func NewEventHub(connectionString string, queueName string, logger *zap.Logger) 
 		nil,       // arguments
 	)
 	if err != nil {
-		ch.Close()
-		conn.Close()
+		if closeErr := ch.Close(); closeErr != nil {
+			logger.Error("Failed to close channel", zap.Error(closeErr))
+		}
+		if closeErr := conn.Close(); closeErr != nil {
+			logger.Error("Failed to close connection", zap.Error(closeErr))
+		}
 		return nil, fmt.Errorf("failed to declare queue: %w", err)
 	}
 
@@ -61,11 +67,15 @@ func (h *EventHub) Close() {
 	defer h.mu.Unlock()
 
 	if h.ch != nil {
-		h.ch.Close()
+		if err := h.ch.Close(); err != nil {
+			h.logger.Error("Failed to close channel", zap.Error(err))
+		}
 		h.ch = nil
 	}
 	if h.conn != nil {
-		h.conn.Close()
+		if err := h.conn.Close(); err != nil {
+			h.logger.Error("Failed to close connection", zap.Error(err))
+		}
 		h.conn = nil
 	}
 
