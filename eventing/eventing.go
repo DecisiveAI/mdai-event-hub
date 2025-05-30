@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,12 +18,6 @@ const (
 	EventQueueName = "mdai-events"
 )
 
-func failOnError(err error, msg string) {
-	if err != nil {
-		log.Panicf("%s: %s", msg, err)
-	}
-}
-
 // NewEventHub creates a new connection to RabbitMQ
 func NewEventHub(connectionString string, queueName string, logger *zap.Logger) (*EventHub, error) {
 	conn, err := amqp.Dial(connectionString)
@@ -34,7 +27,7 @@ func NewEventHub(connectionString string, queueName string, logger *zap.Logger) 
 
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
 
@@ -47,8 +40,8 @@ func NewEventHub(connectionString string, queueName string, logger *zap.Logger) 
 		nil,       // arguments
 	)
 	if err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to declare queue: %w", err)
 	}
 
@@ -68,11 +61,11 @@ func (h *EventHub) Close() {
 	defer h.mu.Unlock()
 
 	if h.ch != nil {
-		h.ch.Close()
+		_ = h.ch.Close()
 		h.ch = nil
 	}
 	if h.conn != nil {
-		h.conn.Close()
+		_ = h.conn.Close()
 		h.conn = nil
 	}
 
