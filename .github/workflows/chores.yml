@@ -132,7 +132,7 @@ jobs:
         run: |
           go mod vendor
           go mod tidy
-          CGO_ENABLED=0 go test -coverprofile=coverage.txt -mod=vendor -v -count=1 ./...
+          CGO_ENABLED=0 go test -cover -coverprofile=coverage.txt -mod=vendor -v -count=1 ./...
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v4
