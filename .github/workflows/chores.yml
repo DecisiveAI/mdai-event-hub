@@ -29,13 +29,6 @@ jobs:
       - name: Clone the code
         uses: actions/checkout@v4
 
-      - name: Test GitHub API access
-        run: |
-          echo "Testing basic API access..."
-          curl -H "Authorization: token ${TOKEN}" https://api.github.com/user
-          echo -e "\nTesting org access..."
-          curl -H "Authorization: token ${TOKEN}" https://api.github.com/orgs/decisiveai
-
       - name: Configure git for private modules
         run: |
           git config --global url."https://user:${TOKEN}@github.com/".insteadOf "https://github.com/"
@@ -132,99 +125,108 @@ jobs:
         run: |
           go mod vendor
           go mod tidy
-          CGO_ENABLED=0 go test -cover -coverprofile=coverage.txt -mod=vendor -v -count=1 ./...
+          CGO_ENABLED=0 go test -cover -coverprofile=coverage.out -mod=vendor -v -count=1 ./...
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v4
         with:
           name: code-coverage
-          path: coverage.txt
+          path: coverage.out
 
   report-coverage:
     name: Report code coverage
     runs-on: ubuntu-latest
     needs: [test, check-go-file-changes]
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      actions: read  # to download code coverage results from "test" job
+      pull-requests: write # write permission needed to comment on PR
     env:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Setup Go
-        uses: actions/setup-go@v4
+      - uses: fgrosse/go-coverage-report@v1.2.0 # Consider using a Git revision for maximum security
         with:
-          go-version: ^1.23
+          coverage-artifact-name: "code-coverage" # can be omitted if you used this default value
+          coverage-file-name: "coverage.out" # can be omitted if you used this default value
 
-      - name: Install go-coverage-report
-        run: go install github.com/fgrosse/go-coverage-report/cmd/go-coverage-report@v1.2.0
-
-      - name: Download code coverage results from current run
-        uses: actions/download-artifact@v4
-        with:
-          name: code-coverage
-          path: .github/outputs
-
-      - name: Rename code coverage results file from current run
-        run: mv .github/outputs/coverage.txt .github/outputs/new-coverage.txt
-
-      - name: Find and download last successful coverage artifact on main
-        id: get_baseline
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Find the latest "code-coverage" artifact on main
-          ARTIFACT=$(gh api -X GET "repos/${{ github.repository }}/actions/artifacts" \
-            --jq '[.artifacts[] | select(.name=="code-coverage")] | sort_by(.updated_at) | last')
-
-          if [[ -z "$ARTIFACT" || "$ARTIFACT" == "null" ]]; then
-            echo "No previous successful 'code-coverage' artifact found on main."
-            exit 1
-          fi
-
-          # Extract the workflow run ID from the artifact
-          RUN_ID=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
-          echo "Found latest coverage artifact from Run ID: $RUN_ID"
-
-          if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
-            echo "Could not determine workflow run ID for the artifact."
-            exit 1
-          fi
-
-          # Download the code coverage artifact from that workflow run
-          gh run download $RUN_ID --name=code-coverage --dir=.github/outputs
-
-          # Rename the file to match expected format
-          if [[ -f ".github/outputs/coverage.txt" ]]; then
-            mv .github/outputs/coverage.txt .github/outputs/old-coverage.txt
-          else
-            echo "Error: coverage.txt not found in downloaded artifacts."
-            exit 1
-          fi
-
-      - name: Download changed files list
-        uses: actions/download-artifact@v4
-        with:
-          name: changed-files
-          path: .github/outputs
-
-      - name: Compare code coverage results
-        run: |
-          go-coverage-report \
-            .github/outputs/old-coverage.txt \
-            .github/outputs/new-coverage.txt \
-            .github/outputs/all_changed_files.json \
-          > .github/outputs/coverage-comment.md
-
-      - name: Comment on pull request
-        run: |
-          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -q '.[] | select(.user.login=="github-actions[bot]" and (.body | test("Coverage Δ")) ) | .id' | head -n 1)
-          if [ -z "$COMMENT_ID" ]; then
-            echo "Creating new coverage report comment"
-          else
-            echo "Replacing old coverage report comment (ID: $COMMENT_ID)"
-            gh api -X DELETE repos/${{ github.repository }}/issues/comments/$COMMENT_ID
-          fi
-
-          gh pr comment ${{ github.event.number }} --body-file=.github/outputs/coverage-comment.md
+#      - name: Setup Go
+#        uses: actions/setup-go@v4
+#        with:
+#          go-version: ^1.23
+#
+#      - name: Install go-coverage-report
+#        run: go install github.com/fgrosse/go-coverage-report/cmd/go-coverage-report@v1.2.0
+#
+#      - name: Download code coverage results from current run
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: code-coverage
+#          path: .github/outputs
+#
+#      - name: Rename code coverage results file from current run
+#        run: mv .github/outputs/coverage.out .github/outputs/new-coverage.out
+#
+#      - name: Find and download last successful coverage artifact on main
+#        id: get_baseline
+#        env:
+#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        run: |
+#          # Find the latest "code-coverage" artifact on main
+#          ARTIFACT=$(gh api -X GET "repos/${{ github.repository }}/actions/artifacts" \
+#            --jq '[.artifacts[] | select(.name=="code-coverage")] | sort_by(.updated_at) | last')
+#
+#          if [[ -z "$ARTIFACT" || "$ARTIFACT" == "null" ]]; then
+#            echo "No previous successful 'code-coverage' artifact found on main."
+#            exit 1
+#          fi
+#
+#          # Extract the workflow run ID from the artifact
+#          RUN_ID=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
+#          echo "Found latest coverage artifact from Run ID: $RUN_ID"
+#
+#          if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
+#            echo "Could not determine workflow run ID for the artifact."
+#            exit 1
+#          fi
+#
+#          # Download the code coverage artifact from that workflow run
+#          gh run download $RUN_ID --name=code-coverage --dir=.github/outputs
+#
+#          # Rename the file to match expected format
+#          if [[ -f ".github/outputs/coverage.out" ]]; then
+#            mv .github/outputs/coverage.out .github/outputs/old-coverage.out
+#          else
+#            echo "Error: coverage.out not found in downloaded artifacts."
+#            exit 1
+#          fi
+#
+#      - name: Download changed files list
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: changed-files
+#          path: .github/outputs
+#
+#      - name: Compare code coverage results
+#        run: |
+#          go-coverage-report \
+#            .github/outputs/old-coverage.out \
+#            .github/outputs/new-coverage.out \
+#            .github/outputs/all_changed_files.json \
+#          > .github/outputs/coverage-comment.md
+#
+#      - name: Comment on pull request
+#        run: |
+#          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -q '.[] | select(.user.login=="github-actions[bot]" and (.body | test("Coverage Δ")) ) | .id' | head -n 1)
+#          if [ -z "$COMMENT_ID" ]; then
+#            echo "Creating new coverage report comment"
+#          else
+#            echo "Replacing old coverage report comment (ID: $COMMENT_ID)"
+#            gh api -X DELETE repos/${{ github.repository }}/issues/comments/$COMMENT_ID
+#          fi
+#
+#          gh pr comment ${{ github.event.number }} --body-file=.github/outputs/coverage-comment.md
 
 #  coverage-badge:
 #    name: Update coverage badge on README
