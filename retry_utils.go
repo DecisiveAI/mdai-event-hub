@@ -37,6 +37,7 @@ func RetryInitializer[T any](
 
 	notifyFunc := func(err error, duration time.Duration) {
 		logger.Error(fmt.Sprintf("failed to initialize %s. retrying...", resourceName),
+			zap.Error(err),
 			zap.Int("retry_count", retryCount),
 			zap.Duration("duration", duration))
 	}

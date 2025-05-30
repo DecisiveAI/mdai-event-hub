@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"log"
@@ -184,12 +185,18 @@ func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInt
 	rmqEndpoint := getEnvVariableWithDefault(rabbitmqEndpointEnvVarKey, "")
 	rmqPassword := getEnvVariableWithDefault(rabbitmqPasswordEnvVarKey, "")
 
+	hubUrl := (&url.URL{
+		Scheme: "amqp",
+		Host:   rmqEndpoint,
+		User:   url.UserPassword("mdai", rmqPassword),
+	}).String()
+
 	logger.Info("Connecting to RabbitMQ",
 		zap.String("endpoint", rmqEndpoint),
 		zap.String("queue", eventing.EventQueueName))
 
 	initializer := func() (eventing.EventHubInterface, error) {
-		return eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
+		return eventing.NewEventHub(hubUrl, eventing.EventQueueName, logger)
 	}
 
 	return RetryInitializer(
