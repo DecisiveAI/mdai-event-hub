@@ -18,8 +18,8 @@ const (
 	EventQueueName = "mdai-events"
 )
 
-// NewEventHub creates a new connection to RabbitMQ
-func NewEventHub(connectionString string, queueName string, logger *zap.Logger) (*EventHub, error) {
+// NewEventHub creates a new connection to eventing lib
+func NewEventHub(connectionString string, queueName string, logger *zap.Logger) (EventHubInterface, error) {
 	conn, err := amqp.Dial(connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial: %w", err)
@@ -27,7 +27,9 @@ func NewEventHub(connectionString string, queueName string, logger *zap.Logger) 
 
 	ch, err := conn.Channel()
 	if err != nil {
-		_ = conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			logger.Error("Failed to close connection", zap.Error(closeErr))
+		}
 		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
 
@@ -40,8 +42,12 @@ func NewEventHub(connectionString string, queueName string, logger *zap.Logger) 
 		nil,       // arguments
 	)
 	if err != nil {
-		_ = ch.Close()
-		_ = conn.Close()
+		if closeErr := ch.Close(); closeErr != nil {
+			logger.Error("Failed to close channel", zap.Error(closeErr))
+		}
+		if closeErr := conn.Close(); closeErr != nil {
+			logger.Error("Failed to close connection", zap.Error(closeErr))
+		}
 		return nil, fmt.Errorf("failed to declare queue: %w", err)
 	}
 
@@ -55,21 +61,24 @@ func NewEventHub(connectionString string, queueName string, logger *zap.Logger) 
 	}, nil
 }
 
-// Close closes the connection to RabbitMQ and waits for processing to complete
+// Close closes connection & waits for processing to complete
 func (h *EventHub) Close() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if h.ch != nil {
-		_ = h.ch.Close()
+		if err := h.ch.Close(); err != nil {
+			h.logger.Error("Failed to close channel", zap.Error(err))
+		}
 		h.ch = nil
 	}
 	if h.conn != nil {
-		_ = h.conn.Close()
+		if err := h.conn.Close(); err != nil {
+			h.logger.Error("Failed to close connection", zap.Error(err))
+		}
 		h.conn = nil
 	}
 
-	// Wait for all in-flight message processing to complete
 	h.processingWg.Wait()
 	h.logger.Info("All message processing completed")
 }
@@ -83,7 +92,6 @@ func (h *EventHub) PublishMessage(event MdaiEvent) error {
 		return fmt.Errorf("connection is closed")
 	}
 
-	// Serialize the event to JSON
 	jsonData, err := json.Marshal(event)
 	if err != nil {
 		return err
@@ -100,7 +108,7 @@ func (h *EventHub) PublishMessage(event MdaiEvent) error {
 		amqp.Publishing{
 			ContentType:  "application/json",
 			Body:         jsonData,
-			DeliveryMode: amqp.Persistent, // Make messages persistent
+			DeliveryMode: amqp.Persistent,
 		})
 
 	if err != nil {
@@ -113,17 +121,16 @@ func (h *EventHub) PublishMessage(event MdaiEvent) error {
 	return nil
 }
 
-// StartListening starts listening for messages and processes them using the provided handler
+// StartListening listens for messages & processes them using provided handler
 func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 	h.mu.Lock()
 	if h.isListening {
 		h.mu.Unlock()
-		return nil // Already listening
+		return nil
 	}
 	h.isListening = true
 	h.mu.Unlock()
 
-	// Setup prefetch - don't overwhelm this consumer
 	err := h.ch.Qos(
 		1,     // prefetch count
 		0,     // prefetch size
@@ -136,7 +143,6 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 		return fmt.Errorf("failed to set QoS: %w", err)
 	}
 
-	// Set up the consumer with manual acknowledgments
 	msgs, err := h.ch.Consume(
 		h.queueName, // queue
 		"",          // consumer
@@ -153,10 +159,8 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 		return fmt.Errorf("failed to consume: %w", err)
 	}
 
-	// Monitor the connection for closures
 	h.connCloseChan = h.conn.NotifyClose(make(chan *amqp.Error, 1))
 
-	// Start consumer in a goroutine
 	go func() {
 		for {
 			select {
@@ -166,9 +170,9 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 
 			case err := <-h.connCloseChan:
 				if err != nil {
-					h.logger.Error("RabbitMQ connection closed", zap.Error(err))
+					h.logger.Error("Event queue connection closed", zap.Error(err))
 				} else {
-					h.logger.Info("RabbitMQ connection closed gracefully")
+					h.logger.Info("Event queue connection closed gracefully")
 				}
 				return
 
@@ -180,7 +184,6 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 
 				h.logger.Info("Received message", zap.Int("size", len(d.Body)))
 
-				// Track this message as being processed
 				h.processingWg.Add(1)
 
 				// Process in a separate goroutine to allow for parallel processing
@@ -188,22 +191,19 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 				go func(delivery amqp.Delivery) {
 					defer h.processingWg.Done()
 
-					// Parse the message as MdaiEvent
 					var event MdaiEvent
 					if err := json.Unmarshal(delivery.Body, &event); err != nil {
 						h.logger.Error("Failed to parse event",
 							zap.Error(err),
 							zap.String("body", string(delivery.Body)))
 
-						// Acknowledge the message even if we couldn't parse it
-						// to avoid redelivery of unparseable messages
+						// Acknowledge to avoid redelivery
 						if err := delivery.Ack(false); err != nil {
 							h.logger.Error("Failed to acknowledge message", zap.Error(err))
 						}
 						return
 					}
 
-					// Process the event with the provided handler
 					err := invoker(event)
 					if err != nil {
 						h.logger.Error("Failed to process event",
@@ -212,12 +212,11 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 							zap.String("eventName", event.Name))
 
 						// Reject the message but don't requeue if it's a permanent error
-						// This is a simplified approach - you might want more sophisticated retry logic
+						// TODO: Retry logic?
 						if err := delivery.Reject(false); err != nil {
 							h.logger.Error("Failed to reject message", zap.Error(err))
 						}
 					} else {
-						// Acknowledge successful processing
 						if err := delivery.Ack(false); err != nil {
 							h.logger.Error("Failed to acknowledge message", zap.Error(err))
 						}
@@ -236,16 +235,12 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 	return nil
 }
 
-// ListenUntilSignal starts the event listener and blocks until a termination signal is received
-// This method handles graceful shutdown when the process receives SIGINT or SIGTERM
 func (h *EventHub) ListenUntilSignal(invoker HandlerInvoker) error {
-	// Start listening for events
 	err := h.StartListening(invoker)
 	if err != nil {
 		return err
 	}
 
-	// Create a channel to listen for termination signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -253,20 +248,17 @@ func (h *EventHub) ListenUntilSignal(invoker HandlerInvoker) error {
 	sig := <-sigChan
 	h.logger.Info("Received signal, shutting down gracefully", zap.String("signal", sig.String()))
 
-	// Initiate shutdown
 	close(h.shutdown)
 
-	// Set a timeout for graceful shutdown
 	shutdownTimeout := 30 * time.Second
 	shutdownComplete := make(chan struct{})
 
 	go func() {
-		// Close connections - this will also wait for processing to complete
+		// this will wait for processing to complete
 		h.Close()
 		close(shutdownComplete)
 	}()
 
-	// Wait for shutdown to complete or timeout
 	select {
 	case <-shutdownComplete:
 		h.logger.Info("Graceful shutdown completed")

@@ -16,7 +16,8 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// ConfigMapManager manages multiple ConfigMap fetchers
+var _ ConfigMapManagerInterface = (*ConfigMapManager)(nil)
+
 type ConfigMapManager struct {
 	clientset    *kubernetes.Clientset
 	namespace    string
@@ -26,7 +27,6 @@ type ConfigMapManager struct {
 	suffix       string
 }
 
-// ConfigMapFetcher provides methods to fetch and watch a specific ConfigMap
 type ConfigMapFetcher struct {
 	clientset     *kubernetes.Clientset
 	namespace     string
@@ -39,29 +39,25 @@ type ConfigMapFetcher struct {
 	cancel        context.CancelFunc
 }
 
-// NewConfigMapManager creates a new ConfigMapManager
 func NewConfigMapManager(suffix string) (*ConfigMapManager, error) {
-	// Create in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create in-cluster config: %v", err)
 	}
 
-	// Create clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create clientset: %v", err)
 	}
 
-	// Get namespace from the pod's environment or use default
+	// TODO: Replace with getEnvVar helper
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
-		// Try to get namespace from the service account token
 		data, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if err == nil {
 			namespace = string(data)
 		} else {
-			namespace = "default" // Fallback to default namespace
+			namespace = "default"
 		}
 	}
 
@@ -74,18 +70,15 @@ func NewConfigMapManager(suffix string) (*ConfigMapManager, error) {
 	}, nil
 }
 
-// GetConfigMapForHub returns the ConfigMap data for a specific hub
-// It creates a new fetcher if one doesn't exist for this hub
+// GetConfigMapForHub returns the ConfigMap data for a specific hub, creating a new ConfigMapManager if one is not found
 func (m *ConfigMapManager) GetConfigMapForHub(ctx context.Context, hubName string) (map[string][]v1.AutomationStep, error) {
 	configMapName := hubName + m.suffix
 
-	// Check if we already have a fetcher for this hub
 	m.fetchersLock.RLock()
 	fetcher, exists := m.fetchers[hubName]
 	m.fetchersLock.RUnlock()
 
 	if !exists {
-		// Create a new fetcher for this hub
 		m.logger.Printf("Creating new fetcher for hub %s (ConfigMap: %s)", hubName, configMapName)
 
 		fetcherCtx, cancel := context.WithCancel(context.Background())
@@ -99,15 +92,12 @@ func (m *ConfigMapManager) GetConfigMapForHub(ctx context.Context, hubName strin
 			cancel:        cancel,
 		}
 
-		// Start watching for changes to this ConfigMap
 		go fetcher.watchConfigMap()
 
-		// Store the fetcher
 		m.fetchersLock.Lock()
 		m.fetchers[hubName] = fetcher
 		m.fetchersLock.Unlock()
 
-		// Initial fetch (blocking to ensure we have data before returning)
 		err := fetcher.fetchConfigMap(ctx)
 		if err != nil {
 			m.logger.Printf("Warning: Initial fetch for hub %s failed: %v", hubName, err)
@@ -115,11 +105,9 @@ func (m *ConfigMapManager) GetConfigMapForHub(ctx context.Context, hubName strin
 		}
 	}
 
-	// Get current data
 	fetcher.dataLock.RLock()
 	defer fetcher.dataLock.RUnlock()
 
-	// Return a copy to prevent race conditions
 	result := make(map[string][]v1.AutomationStep, len(fetcher.data))
 
 	for k, v := range fetcher.data {
@@ -136,7 +124,6 @@ func (m *ConfigMapManager) GetConfigMapForHub(ctx context.Context, hubName strin
 	return result, nil
 }
 
-// Cleanup stops all watchers and releases resources
 func (m *ConfigMapManager) Cleanup() {
 	m.fetchersLock.Lock()
 	defer m.fetchersLock.Unlock()
@@ -147,7 +134,6 @@ func (m *ConfigMapManager) Cleanup() {
 	}
 }
 
-// RemoveHubFetcher stops and removes a hub's fetcher
 func (m *ConfigMapManager) RemoveHubFetcher(hubName string) {
 	m.fetchersLock.Lock()
 	defer m.fetchersLock.Unlock()
@@ -159,7 +145,6 @@ func (m *ConfigMapManager) RemoveHubFetcher(hubName string) {
 	}
 }
 
-// watchConfigMap continuously watches for changes to a ConfigMap
 func (f *ConfigMapFetcher) watchConfigMap() {
 	backoff := 1 * time.Second
 	maxBackoff := 60 * time.Second
@@ -173,7 +158,6 @@ func (f *ConfigMapFetcher) watchConfigMap() {
 			// Continue with watch setup
 		}
 
-		// Setup watcher
 		f.logger.Printf("Setting up watcher for ConfigMap %s", f.configMapName)
 		watcher, err := f.clientset.CoreV1().ConfigMaps(f.namespace).Watch(f.ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("metadata.name=%s", f.configMapName),
@@ -185,7 +169,6 @@ func (f *ConfigMapFetcher) watchConfigMap() {
 
 			select {
 			case <-time.After(backoff):
-				// Increase backoff for next attempt
 				backoff *= 2
 				if backoff > maxBackoff {
 					backoff = maxBackoff
@@ -196,12 +179,10 @@ func (f *ConfigMapFetcher) watchConfigMap() {
 			continue
 		}
 
-		// Reset backoff on successful watch setup
 		backoff = 1 * time.Second
 
 		f.logger.Printf("Successfully set up watcher for ConfigMap %s", f.configMapName)
 
-		// Process events
 		for event := range watcher.ResultChan() {
 			if f.ctx.Err() != nil {
 				watcher.Stop()
@@ -234,7 +215,6 @@ func (f *ConfigMapFetcher) watchConfigMap() {
 	}
 }
 
-// fetchConfigMap gets the current state of the ConfigMap
 func (f *ConfigMapFetcher) fetchConfigMap(ctx context.Context) error {
 	configMap, err := f.clientset.CoreV1().ConfigMaps(f.namespace).Get(ctx, f.configMapName, metav1.GetOptions{})
 	if err != nil {
