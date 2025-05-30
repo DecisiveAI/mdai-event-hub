@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/decisiveai/event-hub-poc/eventing"
+	"github.com/decisiveai/mdai-event-hub/eventing"
 	v1 "github.com/decisiveai/mdai-operator/api/v1"
 	"github.com/stretchr/testify/assert"
 	valkeyMock "github.com/valkey-io/valkey-go/mock"
