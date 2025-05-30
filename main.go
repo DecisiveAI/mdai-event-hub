@@ -7,8 +7,8 @@ import (
 
 	"log"
 
-	"github.com/decisiveai/event-hub-poc/eventing"
 	datacore "github.com/decisiveai/mdai-data-core/handlers"
+	"github.com/decisiveai/mdai-event-hub/eventing"
 	v1 "github.com/decisiveai/mdai-operator/api/v1"
 
 	"os"
