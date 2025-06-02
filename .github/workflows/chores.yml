@@ -158,7 +158,7 @@ jobs:
       - name: Debug coverage output
         run: |
           ls -la
-          echo "Coverage report: ${{ steps.coverage.outputs.report }}"
+          cat current-coverage.breakdown
 
       - name: Post coverage report as comment
         if: github.event_name == 'pull_request'
@@ -169,7 +169,7 @@ jobs:
 
           COMMENT_BODY="go-test-coverage report:
           \`\`\`
-          ${{ steps.coverage.outputs.report }}
+          $(cat current-coverage.breakdown)
           \`\`\`"
 
           if [ -z "$COMMENT_ID" ]; then
