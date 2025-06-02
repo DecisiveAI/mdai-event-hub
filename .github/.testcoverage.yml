@@ -46,7 +46,7 @@ exclude:
 # analyze coverage difference.
 breakdown-file-name: 'current-coverage.breakdown'
 
-diff:
-  # File name of go-test-coverage breakdown file which will be used to
-  # report coverage difference.
-  base-breakdown-file-name: 'main-coverage.breakdown'
+#diff:
+#  # File name of go-test-coverage breakdown file which will be used to
+#  # report coverage difference.
+#  base-breakdown-file-name: 'main-coverage.breakdown'
