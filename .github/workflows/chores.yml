@@ -62,14 +62,14 @@ jobs:
         id: check
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            BASE_COMMIT="${{ github.event.pull_request.base.sha }}"
+            git fetch origin ${{ github.event.pull_request.base.ref }}
+            BASE_COMMIT=$(git merge-base HEAD origin/${{ github.event.pull_request.base.ref }})
           else
             BASE_COMMIT=$(git rev-parse HEAD~1)
           fi
-
-          git fetch origin main
+          
           CHANGED_FILES=$(git diff --name-only "$BASE_COMMIT" HEAD -- '**/*.go' 'go.mod' 'go.sum' | grep -vE '^vendor/' || true)
-
+          
           if [[ -z "$CHANGED_FILES" ]]; then
             echo "go_files_changed=false" >> "$GITHUB_OUTPUT"
           else
