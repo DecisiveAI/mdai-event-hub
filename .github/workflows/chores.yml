@@ -157,6 +157,7 @@ jobs:
 
       - name: Debug coverage output
         run: |
+          ls -la
           echo "Coverage report: ${{ steps.coverage.outputs.report }}"
 
       - name: Post coverage report as comment
