@@ -146,24 +146,35 @@ jobs:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: fgrosse/go-coverage-report@v1.2.0 # Consider using a Git revision for maximum security
-        with:
-          coverage-artifact-name: "code-coverage" # can be omitted if you used this default value
-          coverage-file-name: "coverage.out" # can be omitted if you used this default value
+      - uses: actions/checkout@v4
 
-#      - name: Setup Go
-#        uses: actions/setup-go@v4
-#        with:
-#          go-version: ^1.23
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.23
+
+      - name: Download code coverage results from current run
+        uses: actions/download-artifact@v4
+        with:
+          name: code-coverage
+          path: .github/outputs
+
+      - name: debug downloaded artifacts
+        run: |
+          cd .github
+          ls
+
+      - name: check test coverage
+        uses: vladopajic/go-test-coverage@v2
+        with:
+          config: ./.testcoverage.yml
+          profile: .github/outputs/code-coverage
+
 #
 #      - name: Install go-coverage-report
 #        run: go install github.com/fgrosse/go-coverage-report/cmd/go-coverage-report@v1.2.0
 #
-#      - name: Download code coverage results from current run
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: code-coverage
-#          path: .github/outputs
+#
 #
 #      - name: Rename code coverage results file from current run
 #        run: mv .github/outputs/coverage.out .github/outputs/new-coverage.out
