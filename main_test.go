@@ -7,22 +7,25 @@ import (
 	"github.com/decisiveai/mdai-event-hub/eventing"
 	v1 "github.com/decisiveai/mdai-operator/api/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	valkeyMock "github.com/valkey-io/valkey-go/mock"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 )
 
 // Mock handler for testing
-var testHandlerCalled bool
-var testHandlerError error
+var (
+	testHandlerCalled bool
+	testHandlerError  error //nolint:errname
+)
 
-func testHandler(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
+func testHandler(_ context.Context, _ MdaiComponents, _ eventing.MdaiEvent, _ map[string]string) error {
 	testHandlerCalled = true
 	return testHandlerError
 }
 
 func TestProcessEvent_Success(t *testing.T) {
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -59,12 +62,12 @@ func TestProcessEvent_Success(t *testing.T) {
 	handler := ProcessEvent(ctx, mockClient, mockConfigMgr, logger)
 	err := handler(event)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, testHandlerCalled)
 }
 
 func TestProcessEvent_NoHubName(t *testing.T) {
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -80,12 +83,12 @@ func TestProcessEvent_NoHubName(t *testing.T) {
 	handler := ProcessEvent(ctx, mockClient, mockConfigMgr, logger)
 	err := handler(event)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no hub name provided")
+	require.Error(t, err)
+	assert.EqualError(t, err, "no hub name provided")
 }
 
 func TestProcessEvent_MatchAlertNameOnly(t *testing.T) {
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -121,12 +124,12 @@ func TestProcessEvent_MatchAlertNameOnly(t *testing.T) {
 	handler := ProcessEvent(ctx, mockClient, mockConfigMgr, logger)
 	err := handler(event)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, testHandlerCalled)
 }
 
 func TestProcessEvent_NoWorkflowFound(t *testing.T) {
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -145,7 +148,7 @@ func TestProcessEvent_NoWorkflowFound(t *testing.T) {
 	handler := ProcessEvent(ctx, mockClient, mockConfigMgr, logger)
 	err := handler(event)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestSafePerformAutomationStep_Success(t *testing.T) {
@@ -158,7 +161,7 @@ func TestSafePerformAutomationStep_Success(t *testing.T) {
 	}
 	defer func() { SupportedHandlers = originalHandlers }()
 
-	mdai := MdaiInterface{
+	mdai := MdaiComponents{
 		Logger: zap.NewNop(),
 	}
 
@@ -174,12 +177,12 @@ func TestSafePerformAutomationStep_Success(t *testing.T) {
 
 	err := safePerformAutomationStep(mdai, autoStep, event)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, testHandlerCalled)
 }
 
 func TestSafePerformAutomationStep_UnsupportedHandler(t *testing.T) {
-	mdai := MdaiInterface{
+	mdai := MdaiComponents{
 		Logger: zap.NewNop(),
 	}
 
@@ -195,6 +198,6 @@ func TestSafePerformAutomationStep_UnsupportedHandler(t *testing.T) {
 
 	err := safePerformAutomationStep(mdai, autoStep, event)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "handler unsupportedHandler not supported")
+	require.Error(t, err)
+	assert.EqualError(t, err, "handler unsupportedHandler not supported")
 }

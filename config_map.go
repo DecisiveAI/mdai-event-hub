@@ -4,16 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	v1 "github.com/decisiveai/mdai-operator/api/v1"
 	"log"
 	"os"
 	"sync"
 	"time"
 
+	v1 "github.com/decisiveai/mdai-operator/api/v1"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+)
+
+const (
+	maxBackoff = 60 * time.Second
 )
 
 var _ ConfigMapManagerInterface = (*ConfigMapManager)(nil)
@@ -35,31 +40,22 @@ type ConfigMapFetcher struct {
 	dataLock      sync.RWMutex
 	logger        *log.Logger
 	lastUpdated   time.Time
-	ctx           context.Context
+	ctx           context.Context //nolint:containedctx
 	cancel        context.CancelFunc
 }
 
 func NewConfigMapManager(suffix string) (*ConfigMapManager, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create in-cluster config: %v", err)
+		return nil, fmt.Errorf("failed to create in-cluster config: %w", err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create clientset: %v", err)
+		return nil, fmt.Errorf("failed to create clientset: %w", err)
 	}
 
-	// TODO: Replace with getEnvVar helper
-	namespace := os.Getenv("POD_NAMESPACE")
-	if namespace == "" {
-		data, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-		if err == nil {
-			namespace = string(data)
-		} else {
-			namespace = "default"
-		}
-	}
+	namespace := getEnvVariableWithDefault("POD_NAMESPACE", "default")
 
 	return &ConfigMapManager{
 		clientset: clientset,
@@ -98,8 +94,7 @@ func (m *ConfigMapManager) GetConfigMapForHub(ctx context.Context, hubName strin
 		m.fetchers[hubName] = fetcher
 		m.fetchersLock.Unlock()
 
-		err := fetcher.fetchConfigMap(ctx)
-		if err != nil {
+		if err := fetcher.fetchConfigMap(ctx); err != nil {
 			m.logger.Printf("Warning: Initial fetch for hub %s failed: %v", hubName, err)
 			// We don't return error here, as the watch might succeed later
 		}
@@ -147,8 +142,6 @@ func (m *ConfigMapManager) RemoveHubFetcher(hubName string) {
 
 func (f *ConfigMapFetcher) watchConfigMap() {
 	backoff := 1 * time.Second
-	maxBackoff := 60 * time.Second
-
 	for {
 		select {
 		case <-f.ctx.Done():
@@ -160,7 +153,7 @@ func (f *ConfigMapFetcher) watchConfigMap() {
 
 		f.logger.Printf("Setting up watcher for ConfigMap %s", f.configMapName)
 		watcher, err := f.clientset.CoreV1().ConfigMaps(f.namespace).Watch(f.ctx, metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("metadata.name=%s", f.configMapName),
+			FieldSelector: "metadata.name=" + f.configMapName,
 		})
 
 		if err != nil {
@@ -218,7 +211,7 @@ func (f *ConfigMapFetcher) watchConfigMap() {
 func (f *ConfigMapFetcher) fetchConfigMap(ctx context.Context) error {
 	configMap, err := f.clientset.CoreV1().ConfigMaps(f.namespace).Get(ctx, f.configMapName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get ConfigMap %s: %v", f.configMapName, err)
+		return fmt.Errorf("failed to get ConfigMap %s: %w", f.configMapName, err)
 	}
 
 	f.dataLock.Lock()

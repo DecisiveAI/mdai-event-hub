@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"github.com/cenkalti/backoff/v5"
 	"time"
+
+	"github.com/cenkalti/backoff/v5"
 
 	"go.uber.org/zap"
 )
@@ -31,12 +31,12 @@ func RetryInitializer[T any](
 			retryCount++
 			return "", err
 		}
-		logger.Info(fmt.Sprintf("Successfully initialized %s", resourceName))
+		logger.Info("Successfully initialized " + resourceName)
 		return "", nil
 	}
 
 	notifyFunc := func(err error, duration time.Duration) {
-		logger.Error(fmt.Sprintf("failed to initialize %s. retrying...", resourceName),
+		logger.Error("failed to initialize "+resourceName+". retrying...",
 			zap.Int("retry_count", retryCount),
 			zap.Duration("duration", duration))
 	}
@@ -48,7 +48,7 @@ func RetryInitializer[T any](
 		backoff.WithBackOff(exponentialBackoff),
 		backoff.WithMaxElapsedTime(maxElapsedTime),
 		backoff.WithNotify(notifyFunc)); err != nil {
-		logger.Fatal(fmt.Sprintf("failed to initialize %s", resourceName), zap.Error(err))
+		logger.Fatal("failed to initialize "+resourceName, zap.Error(err))
 		var zero T
 		return zero, err
 	}

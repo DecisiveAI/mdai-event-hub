@@ -25,11 +25,10 @@ var SupportedHandlers = HandlerMap{
 	HandleNoisyServiceAlert:         handleNoisyServiceList,
 }
 
-func processEventPayload(event eventing.MdaiEvent) (map[string]interface{}, error) {
-	var payloadData map[string]interface{}
+func processEventPayload(event eventing.MdaiEvent) (map[string]any, error) {
+	var payloadData map[string]any
 
-	err := json.Unmarshal([]byte(event.Payload), &payloadData)
-	if err != nil {
+	if err := json.Unmarshal([]byte(event.Payload), &payloadData); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
 
@@ -43,8 +42,21 @@ func getArgsValueWithDefault(key string, defaultValue string, args map[string]st
 	return defaultValue
 }
 
-func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
-	ctx := context.Background()
+func getString(m map[string]any, key string) (string, error) {
+	v, ok := m[key]
+	if !ok {
+		return "", fmt.Errorf("key %s not found", key)
+	}
+
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("key %s exists but value is not a string", key)
+	}
+
+	return s, nil
+}
+
+func handleNoisyServiceList(ctx context.Context, mdai MdaiComponents, event eventing.MdaiEvent, args map[string]string) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
@@ -55,27 +67,26 @@ func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args m
 	payloadComparableKey := getArgsValueWithDefault("payload_comparable_ref", "status", args)
 	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
 
-	comp := payloadData[payloadComparableKey].(string)
-
-	payloadValue := payloadData[payloadValueKey].(string)
+	comp, err := getString(payloadData, payloadComparableKey)
+	if err != nil {
+		return fmt.Errorf("failed to get payload comparable key: %w", err)
+	}
+	payloadValue, err := getString(payloadData, payloadValueKey)
+	if err != nil {
+		return fmt.Errorf("failed to get payload value key: %w", err)
+	}
 
 	switch comp {
 	case "firing":
-		if err = mdai.Datacore.AddElementToSet(ctx, variableRef, event.HubName, payloadValue); err != nil {
-			return err
-		}
+		return mdai.Datacore.AddElementToSet(ctx, variableRef, event.HubName, payloadValue)
 	case "resolved":
-		if err = mdai.Datacore.RemoveElementFromSet(ctx, variableRef, event.HubName, payloadValue); err != nil {
-			return err
-		}
+		return mdai.Datacore.RemoveElementFromSet(ctx, variableRef, event.HubName, payloadValue)
 	default:
 		return fmt.Errorf("unknown alert status: %s", comp)
 	}
-	return nil
 }
 
-func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
-	ctx := context.Background()
+func handleAddNoisyServiceToSet(ctx context.Context, mdai MdaiComponents, event eventing.MdaiEvent, args map[string]string) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
@@ -85,18 +96,16 @@ func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent, ar
 	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
 	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
 
-	value := payloadData[payloadValueKey].(string)
-
-	if err := mdai.Datacore.AddElementToSet(ctx, variableRef, event.HubName, value); err != nil {
-		return err
+	value, err := getString(payloadData, payloadValueKey)
+	if err != nil {
+		return fmt.Errorf("failed to get payload value key: %w", err)
 	}
-	// TODO: Debug Log new var val
 
-	return nil
+	// TODO: Debug Log new var val
+	return mdai.Datacore.AddElementToSet(ctx, variableRef, event.HubName, value)
 }
 
-func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
-	ctx := context.Background()
+func handleRemoveNoisyServiceFromSet(ctx context.Context, mdai MdaiComponents, event eventing.MdaiEvent, args map[string]string) error {
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
@@ -106,12 +115,11 @@ func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEven
 	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
 	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
 
-	value := payloadData[payloadValueKey].(string)
-
-	if err := mdai.Datacore.RemoveElementFromSet(ctx, variableRef, event.HubName, value); err != nil {
-		return err
+	value, err := getString(payloadData, payloadValueKey)
+	if err != nil {
+		return fmt.Errorf("failed to get payload value key: %w", err)
 	}
-	// TODO: Debug Log new var val
 
-	return nil
+	// TODO: Debug Log new var val
+	return mdai.Datacore.RemoveElementFromSet(ctx, variableRef, event.HubName, value)
 }

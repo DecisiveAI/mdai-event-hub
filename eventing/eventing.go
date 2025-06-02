@@ -3,6 +3,7 @@ package eventing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -19,7 +20,7 @@ const (
 )
 
 // NewEventHub creates a new connection to eventing lib
-func NewEventHub(connectionString string, queueName string, logger *zap.Logger) (EventHubInterface, error) {
+func NewEventHub(connectionString string, queueName string, logger *zap.Logger) (*EventHub, error) {
 	conn, err := amqp.Dial(connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial: %w", err)
@@ -61,7 +62,7 @@ func NewEventHub(connectionString string, queueName string, logger *zap.Logger) 
 	}, nil
 }
 
-// Close closes connection & waits for processing to complete
+// Close closes connection and waits for processing to complete
 func (h *EventHub) Close() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -89,7 +90,7 @@ func (h *EventHub) PublishMessage(event MdaiEvent) error {
 	defer h.mu.Unlock()
 
 	if h.ch == nil || h.conn == nil {
-		return fmt.Errorf("connection is closed")
+		return errors.New("connection is closed")
 	}
 
 	jsonData, err := json.Marshal(event)
@@ -204,8 +205,7 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 						return
 					}
 
-					err := invoker(event)
-					if err != nil {
+					if err := invoker(event); err != nil {
 						h.logger.Error("Failed to process event",
 							zap.Error(err),
 							zap.String("eventId", event.Id),
@@ -236,8 +236,7 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 }
 
 func (h *EventHub) ListenUntilSignal(invoker HandlerInvoker) error {
-	err := h.StartListening(invoker)
-	if err != nil {
+	if err := h.StartListening(invoker); err != nil {
 		return err
 	}
 

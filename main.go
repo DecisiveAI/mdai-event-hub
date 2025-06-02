@@ -2,17 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
-
-	"log"
 
 	datacore "github.com/decisiveai/mdai-data-core/handlers"
 	"github.com/decisiveai/mdai-event-hub/eventing"
 	v1 "github.com/decisiveai/mdai-operator/api/v1"
-
-	"os"
-	"strings"
 
 	"github.com/go-logr/zapr"
 	"github.com/valkey-io/valkey-go"
@@ -32,6 +30,9 @@ const (
 	valkeyPasswordEnvVarKey = "VALKEY_PASSWORD"
 
 	automationConfigMapNamePostfix = "-automation"
+
+	retryInitializerMaxElapsedTime  = 3 * time.Minute
+	retryInitializerInitialInterval = 5 * time.Second
 )
 
 func init() {
@@ -48,7 +49,7 @@ func init() {
 
 	logger = zap.New(core, zap.AddCaller())
 	// don't really care about failing of defer that is the last thing run before the program exists
-	//nolint:all
+	//nolint:errcheck
 	defer logger.Sync() // Flush logs before exiting
 }
 
@@ -56,62 +57,54 @@ func init() {
 func ProcessEvent(ctx context.Context, client valkey.Client, configMgr ConfigMapManagerInterface, logger *zap.Logger) eventing.HandlerInvoker {
 	dataAdapter := datacore.NewHandlerAdapter(client, zapr.NewLogger(logger))
 
-	mdaiInterface := MdaiInterface{
+	mdaiInterface := MdaiComponents{
 		Datacore: dataAdapter,
 		Logger:   logger,
 	}
 	return func(event eventing.MdaiEvent) error {
 		hubName := event.HubName
 		if hubName == "" {
-			return fmt.Errorf("no hub name provided")
+			return errors.New("no hub name provided")
 		}
-		log.Printf("Processing event for hub: %s", event.HubName)
+		logger.Info("Processing event for hub", zap.String("hub_name", hubName))
 
 		workflowMap, err := configMgr.GetConfigMapForHub(ctx, event.HubName)
 		if err != nil {
-			return fmt.Errorf("error getting ConfigMap for hub %s: %v", event.HubName, err)
+			return fmt.Errorf("error getting ConfigMap for hub %s: %w", hubName, err)
 		}
 
-		var workflowFound = false
-		logger.Info(fmt.Sprintf("Processing event %s", event.Name))
-		// Match on whole name, e.g. "NoisyServiceAlert.firing"
-		if workflow, exists := workflowMap[event.Name]; exists {
-			workflowFound = true
-			for _, automationStep := range workflow {
-				err := safePerformAutomationStep(mdaiInterface, automationStep, event)
-				if err != nil {
-					return err
-				}
-			}
-			// Match on alert name regardless of status, e.g. NoisyServiceAlert
-		} else if nameparts := strings.Split(event.Name, "."); len(nameparts) > 1 {
-			if workflow, exists := workflowMap[nameparts[0]]; exists {
-				workflowFound = true
-				for _, automationStep := range workflow {
-					err := safePerformAutomationStep(mdaiInterface, automationStep, event)
-					if err != nil {
-						return err
-					}
-				}
+		logger.Info("Processing event", zap.String("event_name", event.Name))
+		var workflow []v1.AutomationStep
+
+		workflow, exists := workflowMap[event.Name]
+		if !exists {
+			if parts := strings.Split(event.Name, "."); len(parts) > 1 {
+				workflow = workflowMap[parts[0]]
 			}
 		}
 
-		if !workflowFound {
+		if len(workflow) == 0 {
 			logger.Info("No configured automation for event", zap.String("name", event.Name))
-			return nil // Don't treat this as an error, just log a warning
+			return nil
+		}
+
+		for _, automationStep := range workflow {
+			if err := safePerformAutomationStep(mdaiInterface, automationStep, event); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
 }
 
-func safePerformAutomationStep(mdai MdaiInterface, autoStep v1.AutomationStep, event eventing.MdaiEvent) error {
+func safePerformAutomationStep(mdai MdaiComponents, autoStep v1.AutomationStep, event eventing.MdaiEvent) error {
+	ctx := context.Background()
 	args := autoStep.Arguments
 	handlerName := HandlerName(autoStep.HandlerRef)
 
 	if handlerFn, exists := SupportedHandlers[handlerName]; exists {
 		// TODO add event audit here
-		err := handlerFn(mdai, event, args)
-		if err != nil {
+		if err := handlerFn(ctx, mdai, event, args); err != nil {
 			return fmt.Errorf("handler %s failed: %w", handlerName, err)
 		}
 		return nil
@@ -127,7 +120,6 @@ func getEnvVariableWithDefault(key, defaultValue string) string {
 }
 
 func main() {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -157,11 +149,11 @@ func main() {
 	logger.Info("Service shutting down")
 }
 
-func initValKeyClient(ctx context.Context, logger *zap.Logger) (valkey.Client, error) {
+func initValKeyClient(ctx context.Context, logger *zap.Logger) (valkey.Client, error) { //nolint:ireturn
 	valKeyEndpoint := getEnvVariableWithDefault(valkeyEndpointEnvVarKey, "")
 	valkeyPassword := getEnvVariableWithDefault(valkeyPasswordEnvVarKey, "")
 
-	logger.Info(fmt.Sprintf("Initializing valkey client with endpoint %s", valKeyEndpoint))
+	logger.Info("Initializing valkey client with endpoint " + valKeyEndpoint)
 
 	initializer := func() (valkey.Client, error) {
 		return valkey.NewClient(valkey.ClientOption{
@@ -175,12 +167,12 @@ func initValKeyClient(ctx context.Context, logger *zap.Logger) (valkey.Client, e
 		logger,
 		"valkey client",
 		initializer,
-		3*time.Minute,
-		5*time.Second,
+		retryInitializerMaxElapsedTime,
+		retryInitializerInitialInterval,
 	)
 }
 
-func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInterface, error) {
+func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInterface, error) { //nolint:ireturn
 	rmqEndpoint := getEnvVariableWithDefault(rabbitmqEndpointEnvVarKey, "")
 	rmqPassword := getEnvVariableWithDefault(rabbitmqPasswordEnvVarKey, "")
 
@@ -197,7 +189,7 @@ func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInt
 		logger,
 		"event hub",
 		initializer,
-		3*time.Minute,
-		5*time.Second,
+		retryInitializerMaxElapsedTime,
+		retryInitializerInitialInterval,
 	)
 }
