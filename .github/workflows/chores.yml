@@ -161,13 +161,13 @@ jobs:
 
       - name: debug downloaded artifacts
         run: |
-          cd .github
+          cd .github/outputs
           ls
 
       - name: check test coverage
         uses: vladopajic/go-test-coverage@v2
         with:
-          config: ./.testcoverage.yml
+          config: .testcoverage.yml
           profile: .github/outputs/code-coverage
 
 #
