@@ -171,6 +171,29 @@ jobs:
           config: ./.github/.testcoverage.yml
           profile: ./.github/outputs/coverage.out
 
+      - name: Post coverage report as comment
+        if: github.event_name == 'pull_request'
+        run: |
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq '.[] | select(.user.login=="github-actions[bot]" and (.body | contains("go-test-coverage report:"))) | .id' \
+            | head -n 1)
+
+          COMMENT_BODY="go-test-coverage report:
+          \`\`\`
+          ${{ fromJSON(steps.coverage.outputs.report) }}
+          \`\`\`"
+
+          if [ -z "$COMMENT_ID" ]; then
+            echo "Creating new coverage comment"
+            gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT_BODY"
+          else
+            echo "Updating existing coverage comment (ID: $COMMENT_ID)"
+            gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+              -f body="$COMMENT_BODY"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 #
 #      - name: Install go-coverage-report
 #        run: go install github.com/fgrosse/go-coverage-report/cmd/go-coverage-report@v1.2.0
@@ -228,17 +251,6 @@ jobs:
 #            .github/outputs/all_changed_files.json \
 #          > .github/outputs/coverage-comment.md
 #
-#      - name: Comment on pull request
-#        run: |
-#          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -q '.[] | select(.user.login=="github-actions[bot]" and (.body | test("Coverage Δ")) ) | .id' | head -n 1)
-#          if [ -z "$COMMENT_ID" ]; then
-#            echo "Creating new coverage report comment"
-#          else
-#            echo "Replacing old coverage report comment (ID: $COMMENT_ID)"
-#            gh api -X DELETE repos/${{ github.repository }}/issues/comments/$COMMENT_ID
-#          fi
-#
-#          gh pr comment ${{ github.event.number }} --body-file=.github/outputs/coverage-comment.md
 
 #  coverage-badge:
 #    name: Update coverage badge on README
