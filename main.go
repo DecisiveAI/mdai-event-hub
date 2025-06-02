@@ -111,8 +111,8 @@ func safePerformAutomationStep(mdai MdaiInterface, autoStep v1.AutomationStep, e
 
 	if handlerFn, exists := SupportedHandlers[handlerName]; exists {
 		// TODO add event audit here
-		err := handlerFn(mdai, event, args)
-		if err != nil {
+
+		if err := handlerFn(mdai, event, args); err != nil {
 			return fmt.Errorf("handler %s failed: %w", handlerName, err)
 		}
 		return nil

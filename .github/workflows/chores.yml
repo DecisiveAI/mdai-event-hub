@@ -155,6 +155,10 @@ jobs:
           config: ./.github/.testcoverage.yml
           profile: ./.github/outputs/coverage.out
 
+      - name: Debug coverage output
+        run: |
+          echo "Coverage report: ${{ steps.coverage.outputs.report }}"
+
       - name: Post coverage report as comment
         if: github.event_name == 'pull_request'
         run: |
@@ -164,7 +168,7 @@ jobs:
 
           COMMENT_BODY="go-test-coverage report:
           \`\`\`
-          ${{ fromJSON(steps.coverage.outputs.report) }}
+          ${{ steps.coverage.outputs.report }}
           \`\`\`"
 
           if [ -z "$COMMENT_ID" ]; then
