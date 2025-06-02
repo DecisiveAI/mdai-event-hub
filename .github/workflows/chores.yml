@@ -142,13 +142,8 @@ jobs:
           name: code-coverage
           path: .github/outputs
 
-      - name: debug downloaded artifacts
-        run: |
-          pwd
-          cd .github/outputs
-          ls
-
       - name: check test coverage
+        id: coverage
         uses: vladopajic/go-test-coverage@v2
         continue-on-error: true
         with:
@@ -158,6 +153,7 @@ jobs:
       - name: Debug coverage output
         run: |
           ls -la
+          echo "coverage report: ${{ fromJSON(steps.coverage.outputs.report) }}"
           cat current-coverage.breakdown
 
       - name: Post coverage report as comment
@@ -169,7 +165,7 @@ jobs:
 
           COMMENT_BODY="go-test-coverage report:
           \`\`\`
-          $(cat current-coverage.breakdown)
+          ${{ fromJSON(steps.coverage.outputs.report) }}
           \`\`\`"
 
           if [ -z "$COMMENT_ID" ]; then
