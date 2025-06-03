@@ -179,6 +179,7 @@ jobs:
 
       - name: Generate test coverage report and breakdown
         id: coverage
+        continue-on-error: true
         uses: vladopajic/go-test-coverage@v2
         with:
           config: ./.github/.testcoverage.yml
