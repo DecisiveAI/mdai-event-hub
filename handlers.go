@@ -130,44 +130,54 @@ func handleStaticVariablesActions(mdai MdaiInterface, event eventing.MdaiEvent) 
 			return fmt.Errorf("data should be a list of strings")
 		}
 		{
-			if payloadObj.Operation == "add" {
-				for _, val := range values {
-					mdai.Logger.Info("Setting value", zap.String("Value", val.(string)))
-					if err := mdai.Datacore.AddElementToSet(ctx, payloadObj.Variable, event.HubName, val.(string)); err != nil {
-						return err
+			switch payloadObj.Operation {
+			case "add":
+				{
+					for _, val := range values {
+						mdai.Logger.Info("Setting value", zap.String("Value", val.(string)))
+						if err := mdai.Datacore.AddElementToSet(ctx, payloadObj.Variable, event.HubName, val.(string)); err != nil {
+							return err
+						}
 					}
 				}
-			} else if payloadObj.Operation == "remove" {
-				for _, val := range values {
-					mdai.Logger.Info("Setting value", zap.String("Value", val.(string)))
-					if err := mdai.Datacore.RemoveElementFromSet(ctx, payloadObj.Variable, event.HubName, val.(string)); err != nil {
-						return err
+			case "remove":
+				{
+					for _, val := range values {
+						mdai.Logger.Info("Setting value", zap.String("Value", val.(string)))
+						if err := mdai.Datacore.RemoveElementFromSet(ctx, payloadObj.Variable, event.HubName, val.(string)); err != nil {
+							return err
+						}
 					}
 				}
 			}
 		}
 	case "map":
 		{
-			if payloadObj.Operation == "add" {
-				values, ok := payloadObj.Data.(map[string]interface{})
-				if !ok {
-					return fmt.Errorf("data should be a map[string]string")
-				}
-				for key, val := range values {
-					mdai.Logger.Info("Setting value", zap.String("Field", key), zap.String("Value", val.(string)))
-					if err := mdai.Datacore.AddSetMapElement(ctx, payloadObj.Variable, event.HubName, key, val.(string)); err != nil {
-						return err
+			switch payloadObj.Operation {
+			case "add":
+				{
+					values, ok := payloadObj.Data.(map[string]interface{})
+					if !ok {
+						return fmt.Errorf("data should be a map[string]string")
+					}
+					for key, val := range values {
+						mdai.Logger.Info("Setting value", zap.String("Field", key), zap.String("Value", val.(string)))
+						if err := mdai.Datacore.AddSetMapElement(ctx, payloadObj.Variable, event.HubName, key, val.(string)); err != nil {
+							return err
+						}
 					}
 				}
-			} else if payloadObj.Operation == "remove" {
-				values, ok := payloadObj.Data.([]interface{})
-				if !ok {
-					return fmt.Errorf("data should be a slice of strings")
-				}
-				for _, key := range values {
-					mdai.Logger.Info("Deleting  field", zap.String("Field", key.(string)))
-					if err := mdai.Datacore.RemoveElementFromMap(ctx, payloadObj.Variable, event.HubName, key.(string)); err != nil {
-						return err
+			case "remove":
+				{
+					values, ok := payloadObj.Data.([]interface{})
+					if !ok {
+						return fmt.Errorf("data should be a slice of strings")
+					}
+					for _, key := range values {
+						mdai.Logger.Info("Deleting  field", zap.String("Field", key.(string)))
+						if err := mdai.Datacore.RemoveElementFromMap(ctx, payloadObj.Variable, event.HubName, key.(string)); err != nil {
+							return err
+						}
 					}
 				}
 			}
