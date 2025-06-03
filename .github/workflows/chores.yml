@@ -201,14 +201,12 @@ jobs:
           app-id: ${{ vars.PLATFORM_HEALTH_ACCESS_APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
-      - name: Check installation details
+      - name: List all installations
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          echo "Installation info:"
-          gh api installation/repositories --paginate | jq '.total_count, .repositories[].full_name'
-          echo "Trying to access platform-health directly:"
-          gh api repos/DecisiveAI/platform-health || echo "Failed to access platform-health"
+          echo "Current installation ID:"
+          gh api installation | jq '.id, .account.login, .repository_selection'
 
       - name: Publish coverage to remote repository
         env:
