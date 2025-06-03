@@ -195,6 +195,13 @@ jobs:
         run: |
           echo '${{ fromJSON(steps.coverage.outputs.report) }}' > coverage-${REPO_NAME}.txt
 
+      - name: TMP Debug token
+        env:
+          GH_TOKEN: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          echo "Token length: ${#GH_TOKEN}"
+          echo "Token starts with: ${GH_TOKEN:0:4}"
+
       - name: Publish coverage to remote repository
         env:
           GH_TOKEN: ${{ secrets.APP_PRIVATE_KEY }}
