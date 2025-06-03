@@ -9,6 +9,7 @@ require (
 	github.com/decisiveai/mdai-data-core v0.1.4-0.20250522133232-4aa0a4c57198
 	github.com/decisiveai/mdai-operator v0.1.16-0.20250522133829-a3eb3bddb12b
 	github.com/go-logr/zapr v1.3.0
+	github.com/google/uuid v1.6.0
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/stretchr/testify v1.10.0
 	github.com/valkey-io/valkey-go v1.0.57
@@ -33,7 +34,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
