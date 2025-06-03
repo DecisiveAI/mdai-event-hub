@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/decisiveai/event-hub-poc/eventing"
 	datacore "github.com/decisiveai/mdai-data-core/handlers"
+	"github.com/decisiveai/mdai-event-hub/eventing"
 	"go.uber.org/zap"
 )
 
