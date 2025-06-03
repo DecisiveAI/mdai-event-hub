@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GOPRIVATE: github.com/decisiveai/*
-  TOKEN: ${{ secrets.TOKEN_OPERATOR }}
+  COVERAGE_REPO: ${{ vars.COVERAGE_REPO || 'decisiveai/platform-health' }}
+  REPO_NAME: ${{ github.event.repository.name }}
 
 jobs:
   lint:
@@ -22,16 +22,9 @@ jobs:
       contents: read
       repository-projects: read
       packages: read
-    env:
-      GOPRIVATE: github.com/decisiveai/*
-      TOKEN: ${{ secrets.TOKEN_OPERATOR }}
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
-
-      - name: Configure git for private modules
-        run: |
-          git config --global url."https://user:${TOKEN}@github.com/".insteadOf "https://github.com/"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -65,7 +58,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             BASE_COMMIT="${{ github.event.pull_request.base.sha }}"
           else
-            BASE_COMMIT=$(git rev-parse HEAD~1)  # Previous commit on main
+            BASE_COMMIT=$(git rev-parse HEAD~1)
           fi
           echo "BASE_COMMIT=$BASE_COMMIT"
           echo "BASE_COMMIT=$BASE_COMMIT" >> "$GITHUB_ENV"
@@ -73,10 +66,7 @@ jobs:
       - name: Check for Go-related file changes
         id: check
         run: |
-          # Fetch latest main branch
           git fetch origin main
-
-          # Find changed Go files (excluding _test.go and vendor/)
           CHANGED_FILES=$(git diff --name-only "$BASE_COMMIT" HEAD -- '**/*.go' 'go.mod' 'go.sum' '*.go' | grep -vE '^vendor/' || true)
 
           if [[ -z "$CHANGED_FILES" ]]; then
@@ -93,9 +83,6 @@ jobs:
     needs: [lint, check-go-file-changes]
     if: needs.check-go-file-changes.outputs.go_files_changed == 'true'
     steps:
-      - name: Configure git for private modules
-        run: git config --global url."https://user:${TOKEN}@github.com".insteadOf "https://github.com"
-
       - name: Clone the code
         uses: actions/checkout@v4
 
@@ -116,15 +103,53 @@ jobs:
           name: code-coverage
           path: coverage.out
 
-  report-coverage:
-    name: Report code coverage
+  find-baseline-coverage:
+    name: Find baseline coverage for diff
     runs-on: ubuntu-latest
     needs: [test, check-go-file-changes]
     if: github.event_name == 'pull_request'
+    outputs:
+      baseline_found: ${{ steps.find.outputs.baseline_found }}
+      baseline_path: ${{ steps.find.outputs.baseline_path }}
+    steps:
+      - name: Find latest coverage artifact on main
+        id: find
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Look for the latest coverage artifact on main
+          ARTIFACT=$(gh api -X GET "repos/${{ github.repository }}/actions/artifacts" \
+            --jq '[.artifacts[] | select(.name=="code-coverage" and .workflow_run.head_branch=="main")] | sort_by(.updated_at) | last')
+
+          if [[ -z "$ARTIFACT" || "$ARTIFACT" == "null" ]]; then
+            echo "No baseline coverage found on main"
+            echo "baseline_found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found baseline coverage artifact"
+            echo "baseline_found=true" >> "$GITHUB_OUTPUT"
+          
+            # Download the baseline coverage
+            RUN_ID=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
+            gh run download $RUN_ID --name=main-coverage --dir=baseline-coverage
+            echo "baseline_path=baseline-coverage/coverage.out" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload baseline coverage if found
+        if: steps.find.outputs.baseline_found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-coverage
+          path: baseline-coverage/
+
+  report-coverage:
+    name: Report code coverage
+    runs-on: ubuntu-latest
+    needs: [test, find-baseline-coverage]
+    if: github.event_name == 'pull_request'
     permissions:
       contents: read
-      actions: read  # to download code coverage results from "test" job
-      pull-requests: write # write permission needed to comment on PR
+      actions: read
+      pull-requests: write
     env:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
@@ -142,22 +167,23 @@ jobs:
           name: code-coverage
           path: .github/outputs
 
-      - name: check test coverage
+      - name: Download baseline coverage if available
+        if: needs.find-baseline-coverage.outputs.baseline_found == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: baseline-coverage
+          path: .github/baseline
+
+      - name: Check test coverage with diff
         id: coverage
         uses: vladopajic/go-test-coverage@v2
         continue-on-error: true
         with:
           config: ./.github/.testcoverage.yml
           profile: ./.github/outputs/coverage.out
-
-      - name: Debug coverage output
-        run: |
-          ls -la
-          echo "coverage report: ${{ fromJSON(steps.coverage.outputs.report) }}"
-          cat current-coverage.breakdown
+          diff-base-breakdown-file-name: ${{ needs.find-baseline-coverage.outputs.baseline_found == 'true' && './.github/baseline/coverage.out' || '' }}
 
       - name: Post coverage report as comment
-        if: github.event_name == 'pull_request'
         run: |
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
             --jq '.[] | select(.user.login=="github-actions[bot]" and (.body | contains("go-test-coverage report:"))) | .id' \
@@ -176,184 +202,101 @@ jobs:
             gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
               -f body="$COMMENT_BODY"
           fi
+
+  main-coverage:
+    name: Generate coverage report on main
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: code-coverage
+          path: .
+
+      - name: Publish coverage to remote repository
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.COVERAGE_REPO_TOKEN }}
+        run: |
+          # Generate coverage report
+          go install github.com/axw/gocov/gocov@latest
+          gocov convert coverage.out | gocov report > coverage-${REPO_NAME}.txt
 
-#
-#      - name: Install go-coverage-report
-#        run: go install github.com/fgrosse/go-coverage-report/cmd/go-coverage-report@v1.2.0
-#
-#
-#
-#      - name: Rename code coverage results file from current run
-#        run: mv .github/outputs/coverage.out .github/outputs/new-coverage.out
-#
-#      - name: Find and download last successful coverage artifact on main
-#        id: get_baseline
-#        env:
-#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        run: |
-#          # Find the latest "code-coverage" artifact on main
-#          ARTIFACT=$(gh api -X GET "repos/${{ github.repository }}/actions/artifacts" \
-#            --jq '[.artifacts[] | select(.name=="code-coverage")] | sort_by(.updated_at) | last')
-#
-#          if [[ -z "$ARTIFACT" || "$ARTIFACT" == "null" ]]; then
-#            echo "No previous successful 'code-coverage' artifact found on main."
-#            exit 1
-#          fi
-#
-#          # Extract the workflow run ID from the artifact
-#          RUN_ID=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
-#          echo "Found latest coverage artifact from Run ID: $RUN_ID"
-#
-#          if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
-#            echo "Could not determine workflow run ID for the artifact."
-#            exit 1
-#          fi
-#
-#          # Download the code coverage artifact from that workflow run
-#          gh run download $RUN_ID --name=code-coverage --dir=.github/outputs
-#
-#          # Rename the file to match expected format
-#          if [[ -f ".github/outputs/coverage.out" ]]; then
-#            mv .github/outputs/coverage.out .github/outputs/old-coverage.out
-#          else
-#            echo "Error: coverage.out not found in downloaded artifacts."
-#            exit 1
-#          fi
-#
-#      - name: Download changed files list
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: changed-files
-#          path: .github/outputs
-#
-#      - name: Compare code coverage results
-#        run: |
-#          go-coverage-report \
-#            .github/outputs/old-coverage.out \
-#            .github/outputs/new-coverage.out \
-#            .github/outputs/all_changed_files.json \
-#          > .github/outputs/coverage-comment.md
-#
+          # Clone the coverage repository
+          git clone https://x-access-token:${GH_TOKEN}@github.com/${COVERAGE_REPO}.git coverage-repo
+          cd coverage-repo
+          
+          # Configure git
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          
+          # Copy the new coverage file
+          cp ../coverage-${REPO_NAME}.txt .
+          
+          # Commit and push changes
+          git add coverage-${REPO_NAME}.txt
+          if git diff --cached --quiet; then
+            echo "✅ No changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: Update coverage report for ${REPO_NAME} from CI"
+          git push origin main
 
-#  coverage-badge:
-#    name: Update coverage badge on README
-#    runs-on: ubuntu-latest
-#    needs: [ test ]
-#    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-#    steps:
-#      - name: Checkout repository
-#        uses: actions/checkout@v4
-#
-#      - name: Download coverage artifact
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: code-coverage
-#          path: .
-#
-#      - name: List downloaded files (debugging)
-#        run: ls -R
-#
-#      - name: Verify README exists
-#        run: ls -l README.md || echo "README.md not found!"
-#
-#      - name: Generate Go Coverage Badge
-#        id: generate-badge
-#        uses: tj-actions/coverage-badge-go@v2
-#        with:
-#          filename: coverage.out
-#
-#      - name: Verify Changed README
-#        if: steps.generate-badge.outcome == 'success'
-#        id: verify-changed-readme
-#        run: |
-#          git fetch origin main
-#          if git diff --quiet origin/main -- README.md; then
-#            echo "README.md has NOT changed."
-#            echo "readme_changed=false" >> $GITHUB_ENV
-#          else
-#            echo "README.md has changed."
-#            echo "readme_changed=true" >> $GITHUB_ENV
-#          fi
-#
-#      - name: Commit changes
-#        if: env.readme_changed == 'true'
-#        env:
-#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        run: |
-#          # Ensure we are on the main branch
-#          git fetch origin main
-#          git checkout main
-#          git pull origin main
-#
-#          # Configure Git
-#          git config --local user.email "action@github.com"
-#          git config --local user.name "GitHub Action"
-#
-#          # Commit and push changes
-#          git add README.md
-#          git commit -m "chore: Updated coverage badge." || echo "No changes to commit"
-#          git push origin main
+  coverage-badge:
+    name: Update coverage badge on README
+    runs-on: ubuntu-latest
+    needs: [main-coverage]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-#  capture-coverage:
-#    name: Capture coverage in platform_health repo
-#    runs-on: ubuntu-latest
-#    needs: [test]
-#    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-#    steps:
-#      - name: Configure git for private modules
-#        run: git config --global url."https://user:${TOKEN}@github.com".insteadOf "https://github.com"
-#
-#      - name: Clone the code
-#        uses: actions/checkout@v4
-#
-#      - name: Setup Go
-#        uses: actions/setup-go@v5
-#        with:
-#          go-version-file: go.mod
-#
-#      - name: Download coverage artifact
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: code-coverage
-#          path: .
-#
-#      - name: Capture coverage in health repo
-#        run: |
-#          go install github.com/axw/gocov/gocov@latest
-#          gocov convert coverage.out | gocov report > coverage-mdai-event-hub.txt
-#
-#      - name: Generate a token
-#        id: generate-token
-#        uses: actions/create-github-app-token@v1
-#        with:
-#          app-id: ${{ vars.PLATFORM_HEALTH_ACCESS_APP_ID }}
-#          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-#
-#      - name: Set safe git directory
-#        env:
-#          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-#        run: git config --global --add safe.directory '*'
-#      - name: Commit coverage to health repo
-#        env:
-#          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-#        run: |
-#          git clone https://x-access-token:${GH_TOKEN}@github.com/decisiveai/platform-health.git
-#          cd platform-health
-#
-#          # Configure git
-#          git config --global user.email "action@github.com"
-#          git config --global user.name "GitHub Action"
-#
-#          # Copy the new coverage file
-#          cp ../coverage-mdai-event-hub.txt .
-#
-#          # Commit and push changes
-#          git add coverage-mdai-event-hub.txt
-#          if git diff --cached --quiet; then
-#            echo "✅ No changes to commit."
-#            exit 0
-#          fi
-#          git commit -m "chore: Update coverage report from CI"
-#          git push origin main
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: code-coverage
+          path: .
+
+      - name: Generate Go Coverage Badge
+        id: generate-badge
+        uses: tj-actions/coverage-badge-go@v2
+        with:
+          filename: coverage.out
+
+      - name: Verify Changed README
+        if: steps.generate-badge.outcome == 'success'
+        id: verify-changed-readme
+        run: |
+          git fetch origin main
+          if git diff --quiet origin/main -- README.md; then
+            echo "README.md has NOT changed."
+            echo "readme_changed=false" >> $GITHUB_ENV
+          else
+            echo "README.md has changed."
+            echo "readme_changed=true" >> $GITHUB_ENV
+          fi
+
+      - name: Commit changes
+        if: env.readme_changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin main
+          git checkout main
+          git pull origin main
+
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          git add README.md
+          git commit -m "chore: Updated coverage badge." || echo "No changes to commit"
+          git push origin main
