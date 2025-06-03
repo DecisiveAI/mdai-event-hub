@@ -200,6 +200,20 @@ jobs:
         with:
           app-id: ${{ vars.PLATFORM_HEALTH_ACCESS_APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: Check app details
+        run: |
+          echo "App ID length: ${#APP_ID}"
+          echo "Private key starts with: ${PRIVATE_KEY:0:30}"
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+      - name: Debug token generation
+        run: |
+          echo "Token exists: ${{ steps.generate_token.outputs.token != '' }}"
+          echo "Token length: ${#GH_TOKEN}"
+          echo "Token starts with: ${GH_TOKEN:0:4}"
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
 
       - name: List all installations
         env:
