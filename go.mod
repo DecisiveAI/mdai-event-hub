@@ -6,7 +6,7 @@ toolchain go1.24.3
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.2
-	github.com/decisiveai/mdai-data-core v0.1.4-0.20250522133232-4aa0a4c57198
+	github.com/decisiveai/mdai-data-core v0.1.6
 	github.com/decisiveai/mdai-operator v0.1.16-0.20250522133829-a3eb3bddb12b
 	github.com/go-logr/zapr v1.3.0
 	github.com/rabbitmq/amqp091-go v1.10.0
@@ -68,5 +68,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/decisiveai/mdai-data-core => ../mdai-data-core
