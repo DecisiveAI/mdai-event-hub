@@ -43,7 +43,8 @@ type ConfigMapFetcher struct {
 }
 
 func NewConfigMapManager(suffix string) (*ConfigMapManager, error) {
-
+	// attempting to create inCLuster k8s client first - if fails, tries to create out of cluster client
+	// so can be started locally for dev purposes
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		kubeconfig, err := os.UserHomeDir()
