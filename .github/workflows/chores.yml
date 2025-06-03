@@ -18,10 +18,6 @@ jobs:
   lint:
     name: Lint on Ubuntu
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      repository-projects: read
-      packages: read
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
@@ -60,7 +56,6 @@ jobs:
           else
             BASE_COMMIT=$(git rev-parse HEAD~1)
           fi
-          echo "BASE_COMMIT=$BASE_COMMIT"
           echo "BASE_COMMIT=$BASE_COMMIT" >> "$GITHUB_ENV"
 
       - name: Check for Go-related file changes
@@ -103,88 +98,49 @@ jobs:
           name: code-coverage
           path: coverage.out
 
-  find-baseline-coverage:
-    name: Find baseline coverage for diff
-    runs-on: ubuntu-latest
-    needs: [test, check-go-file-changes]
-    if: github.event_name == 'pull_request'
-    outputs:
-      baseline_found: ${{ steps.find.outputs.baseline_found }}
-      baseline_path: ${{ steps.find.outputs.baseline_path }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Find latest coverage artifact on main
-        id: find
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ARTIFACT=$(gh api -X GET "repos/${{ github.repository }}/actions/artifacts" \
-            --jq '[.artifacts[] | select(.name=="code-coverage" and .workflow_run.head_branch=="main")] | sort_by(.updated_at) | last')
-
-          if [[ -z "$ARTIFACT" || "$ARTIFACT" == "null" ]]; then
-            echo "No baseline coverage found on main"
-            echo "baseline_found=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Found baseline coverage artifact"
-            echo "baseline_found=true" >> "$GITHUB_OUTPUT"
-          
-            # Download the baseline coverage
-            RUN_ID=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
-            gh run download $RUN_ID --name=code-coverage --dir=baseline-coverage
-            echo "baseline_path=baseline-coverage/coverage.out" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload baseline coverage if found
-        if: steps.find.outputs.baseline_found == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: baseline-coverage
-          path: baseline-coverage/
-
   report-coverage:
     name: Report code coverage
     runs-on: ubuntu-latest
-    needs: [test, find-baseline-coverage]
-    if: github.event_name == 'pull_request'
+    needs: [test, check-go-file-changes]
+    if: github.event_name == 'pull_request' && needs.check-go-file-changes.outputs.go_files_changed == 'true'
     permissions:
       contents: read
       actions: read
       pull-requests: write
     env:
-      GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Clone the code
+        uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ^1.23
-
-      - name: Download code coverage results from current run
+      - name: Download current coverage
         uses: actions/download-artifact@v4
         with:
           name: code-coverage
-          path: .github/outputs
+          path: .
 
-      - name: Download baseline coverage if available
-        if: needs.find-baseline-coverage.outputs.baseline_found == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: baseline-coverage
-          path: .github/baseline
+      - name: Find and download baseline breakdown
+        run: |
+          # Look for latest main.breakdown artifact
+          ARTIFACT=$(gh api "repos/${{ github.repository }}/actions/artifacts" \
+            --jq '[.artifacts[] | select(.name=="main-breakdown" and .workflow_run.head_branch=="main")] | sort_by(.updated_at) | last')
+          
+          if [[ "$ARTIFACT" != "null" && -n "$ARTIFACT" ]]; then
+            echo "Found baseline breakdown artifact"
+            RUN_ID=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
+            gh run download $RUN_ID --name=main-breakdown --dir=baseline || echo "Download failed, proceeding without baseline"
+          else
+            echo "No baseline breakdown found, proceeding without baseline"
+          fi
 
       - name: Check test coverage with diff
         id: coverage
         uses: vladopajic/go-test-coverage@v2
         continue-on-error: true
         with:
-          debug: true
           config: ./.github/.testcoverage.yml
-          profile: ./.github/outputs/coverage.out
-          diff-base-breakdown-file-name: ${{ needs.find-baseline-coverage.outputs.baseline_found == 'true' && './.github/baseline/coverage.out' || '' }}
+          profile: coverage.out
+          diff-base-breakdown-file-name: ${{ hashFiles('baseline/main.breakdown') != '' && 'baseline/main.breakdown' || '' }}
 
       - name: Post coverage report as comment
         run: |
@@ -207,18 +163,13 @@ jobs:
           fi
 
   main-coverage:
-    name: Generate coverage report on main
+    name: Generate and publish coverage on main
     runs-on: ubuntu-latest
-    needs: [ test ]
+    needs: [test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
 
       - name: Download coverage artifact
         uses: actions/download-artifact@v4
@@ -226,12 +177,18 @@ jobs:
           name: code-coverage
           path: .
 
-      - name: Generate test coverage report
+      - name: Generate test coverage report and breakdown
         id: coverage
         uses: vladopajic/go-test-coverage@v2
         with:
           config: ./.github/.testcoverage.yml
           profile: coverage.out
+
+      - name: Upload breakdown as baseline for future diffs
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-breakdown
+          path: main.breakdown
 
       - name: Save coverage report to file
         run: |
@@ -244,14 +201,14 @@ jobs:
           # Clone the coverage repository
           git clone https://x-access-token:${GH_TOKEN}@github.com/${COVERAGE_REPO}.git coverage-repo
           cd coverage-repo
-
+          
           # Configure git
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-
+          
           # Copy the new coverage file
           cp ../coverage-${REPO_NAME}.txt .
-
+          
           # Commit and push changes
           git add coverage-${REPO_NAME}.txt
           if git diff --cached --quiet; then
