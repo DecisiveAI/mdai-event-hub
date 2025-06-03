@@ -43,6 +43,20 @@ func getArgsValueWithDefault(key string, defaultValue string, args map[string]st
 	return defaultValue
 }
 
+func getString(m map[string]any, key string) (string, error) {
+	v, ok := m[key]
+	if !ok {
+		return "", fmt.Errorf("key %s not found", key)
+	}
+
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("key %s exists but value is not a string", key)
+	}
+
+	return s, nil
+}
+
 func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
 	ctx := context.Background()
 	payloadData, err := processEventPayload(event)
@@ -55,9 +69,14 @@ func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args m
 	payloadComparableKey := getArgsValueWithDefault("payload_comparable_ref", "status", args)
 	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
 
-	comp := payloadData[payloadComparableKey].(string)
-
-	payloadValue := payloadData[payloadValueKey].(string)
+	comp, err := getString(payloadData, payloadComparableKey)
+	if err != nil {
+		return fmt.Errorf("failed to get payload comparable key: %w", err)
+	}
+	payloadValue, err := getString(payloadData, payloadValueKey)
+	if err != nil {
+		return fmt.Errorf("failed to get payload value key: %w", err)
+	}
 
 	switch comp {
 	case "firing":
@@ -85,7 +104,10 @@ func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent, ar
 	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
 	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
 
-	value := payloadData[payloadValueKey].(string)
+	value, err := getString(payloadData, payloadValueKey)
+	if err != nil {
+		return fmt.Errorf("failed to get payload value key: %w", err)
+	}
 
 	if err := mdai.Datacore.AddElementToSet(ctx, variableRef, event.HubName, value); err != nil {
 		return err
@@ -106,7 +128,10 @@ func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEven
 	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
 	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
 
-	value := payloadData[payloadValueKey].(string)
+	value, err := getString(payloadData, payloadValueKey)
+	if err != nil {
+		return fmt.Errorf("failed to get payload value key: %w", err)
+	}
 
 	if err := mdai.Datacore.RemoveElementFromSet(ctx, variableRef, event.HubName, value); err != nil {
 		return err
