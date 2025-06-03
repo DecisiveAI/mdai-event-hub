@@ -78,7 +78,10 @@ func ProcessEvent(ctx context.Context, client valkey.Client, configMgr ConfigMap
 		logger.Info(fmt.Sprintf("Processing event %s", event.Name))
 		// Handle static variables
 		if event.Source == staticVariablesEventSource {
-			_ = handleStaticVariablesActions(mdaiInterface, event)
+			err := handleStaticVariablesActions(mdaiInterface, event)
+			if err != nil {
+				return err
+			}
 			// Match on whole name, e.g. "NoisyServiceAlert.firing"
 		} else if workflow, exists := workflowMap[event.Name]; exists {
 			workflowFound = true
