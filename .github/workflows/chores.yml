@@ -194,17 +194,23 @@ jobs:
       - name: Save coverage report to file
         run: |
           echo '${{ fromJSON(steps.coverage.outputs.report) }}' > coverage-${REPO_NAME}.txt
+          
+      - uses: actions/create-github-app-token@v2
+        id: generate_token
+        with:
+          app-id: ${{ vars.PLATFORM_HEALTH_ACCESS_APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: TMP Debug token
         env:
-          GH_TOKEN: ${{ secrets.APP_PRIVATE_KEY }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           echo "Token length: ${#GH_TOKEN}"
           echo "Token starts with: ${GH_TOKEN:0:4}"
 
       - name: Publish coverage to remote repository
         env:
-          GH_TOKEN: ${{ secrets.APP_PRIVATE_KEY }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           # Clone the coverage repository
           git clone https://x-access-token:${GH_TOKEN}@github.com/${COVERAGE_REPO}.git coverage-repo
