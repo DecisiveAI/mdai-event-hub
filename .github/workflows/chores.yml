@@ -200,10 +200,7 @@ jobs:
         with:
           app-id: ${{ vars.PLATFORM_HEALTH_ACCESS_APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-      - name: Debug repository context
-        run: |
-          echo "Repository: ${{ github.repository }}"
-          echo "Repository name: ${{ github.event.repository.name }}"
+
       - name: Check app details
         run: |
           echo "App ID length: ${#APP_ID}"
