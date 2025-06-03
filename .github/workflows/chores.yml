@@ -181,6 +181,7 @@ jobs:
         uses: vladopajic/go-test-coverage@v2
         continue-on-error: true
         with:
+          debug: true
           config: ./.github/.testcoverage.yml
           profile: ./.github/outputs/coverage.out
           diff-base-breakdown-file-name: ${{ needs.find-baseline-coverage.outputs.baseline_found == 'true' && './.github/baseline/coverage.out' || '' }}
