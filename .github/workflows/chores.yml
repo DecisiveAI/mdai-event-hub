@@ -268,7 +268,7 @@ jobs:
 
       - name: Generate Go Coverage Badge
         id: generate-badge
-        uses: tj-actions/coverage-badge-go@v2
+        uses: tj-actions/coverage-badge-go@v3
         with:
           filename: coverage.out
 
@@ -298,5 +298,5 @@ jobs:
           git config --local user.name "GitHub Action"
 
           git add README.md
-          git commit -m "chore: Updated coverage badge." || echo "No changes to commit"
+          git commit -m "chore: Updated coverage badge. [skip ci]" || echo "No changes to commit"
           git push origin main
