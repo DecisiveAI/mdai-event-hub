@@ -9,16 +9,16 @@ serviceAccount:
 
 deployment:
   namespace: mdai
-  name: event-hub-poc
+  name: mdai-event-hub
   replicas: 1
   containerPort: 8082
 image:
-  repository: public.ecr.aws/p3k6k6h3/event-hub-poc
+  repository: public.ecr.aws/p3k6k6h3/mdai-event-hub
   # tag: 0.0.1
 
 service:
   namespace: mdai
-  name: event-hub-poc
+  name: mdai-event-hub
   replicas: 1
   port: 8082
   targetPort: 8082

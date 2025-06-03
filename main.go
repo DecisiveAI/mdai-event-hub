@@ -55,7 +55,7 @@ func init() {
 }
 
 // ProcessEvent handles an MdaiEvent according to configured workflows
-func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger) eventing.HandlerInvoker {
+func ProcessEvent(ctx context.Context, client valkey.Client, configMgr ConfigMapManagerInterface, logger *zap.Logger) eventing.HandlerInvoker {
 	dataAdapter := datacore.NewHandlerAdapter(client, zapr.NewLogger(logger))
 
 	mdaiInterface := MdaiInterface{
@@ -63,18 +63,12 @@ func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger)
 		Logger:   logger,
 	}
 	return func(event eventing.MdaiEvent) error {
-
-		configMgr, err := NewConfigMapManager(automationConfigMapNamePostfix)
-		if err != nil {
-			return fmt.Errorf("failed to create ConfigMap manager: %v", err)
-		}
 		hubName := event.HubName
 		if hubName == "" {
 			return fmt.Errorf("no hub name provided")
 		}
 		log.Printf("Processing event for hub: %s", event.HubName)
 
-		// Get ConfigMap data for this hub
 		workflowMap, err := configMgr.GetConfigMapForHub(ctx, event.HubName)
 		if err != nil {
 			return fmt.Errorf("error getting ConfigMap for hub %s: %v", event.HubName, err)
@@ -95,7 +89,7 @@ func ProcessEvent(ctx context.Context, client valkey.Client, logger *zap.Logger)
 				}
 			}
 			// Match on alert name regardless of status, e.g. NoisyServiceAlert
-		} else if nameparts := strings.Split(event.Name, "."); len(nameparts) > 0 {
+		} else if nameparts := strings.Split(event.Name, "."); len(nameparts) > 1 {
 			if workflow, exists := workflowMap[nameparts[0]]; exists {
 				workflowFound = true
 				for _, automationStep := range workflow {
@@ -148,16 +142,20 @@ func main() {
 		logger.Fatal("failed to get valkey client", zap.Error(err))
 	}
 
-	// Create event hub with retry logic
 	hub, err := initEventHub(ctx, logger)
 	if err != nil {
 		logger.Fatal("Failed to create EventHub", zap.Error(err))
 	}
 	defer hub.Close()
 
+	configMgr, err := NewConfigMapManager(automationConfigMapNamePostfix)
+	if err != nil {
+		logger.Fatal("Failed to create ConfigMap manager", zap.Error(err))
+	}
+	defer configMgr.Cleanup()
+
 	// Start listening and block until termination signal
-	// This handles all the signal processing internally
-	err = hub.ListenUntilSignal(ProcessEvent(ctx, valkeyClient, logger))
+	err = hub.ListenUntilSignal(ProcessEvent(ctx, valkeyClient, configMgr, logger))
 	if err != nil {
 		logger.Fatal("Failed to start event listener", zap.Error(err))
 	}
@@ -188,18 +186,17 @@ func initValKeyClient(ctx context.Context, logger *zap.Logger) (valkey.Client, e
 	)
 }
 
-func initEventHub(ctx context.Context, logger *zap.Logger) (*eventing.EventHub, error) {
+func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInterface, error) {
 	rmqEndpoint := getEnvVariableWithDefault(rabbitmqEndpointEnvVarKey, "")
 	rmqUser := getEnvVariableWithDefault(rabbitmqUserEnvVarKey, "")
 	rmqPassword := getEnvVariableWithDefault(rabbitmqPasswordEnvVarKey, "")
 
-	// Log connection parameters (but mask the password)
 	logger.Info("Connecting to RabbitMQ",
 		zap.String("endpoint", rmqEndpoint),
 		zap.String("queue", eventing.EventQueueName))
 
-	initializer := func() (*eventing.EventHub, error) {
-		return eventing.NewEventHub("amqp://"+rmqUser+":"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
+	initializer := func() (eventing.EventHubInterface, error) {
+		return eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
 	}
 
 	return RetryInitializer(

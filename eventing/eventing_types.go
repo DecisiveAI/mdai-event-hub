@@ -32,7 +32,7 @@ type MdaiEvent struct {
 	Payload       string    `json:"payload"`
 	Source        string    `json:"source"`
 	CorrelationId string    `json:"correlationId,omitempty"`
-	HubName       string    `json:"hubName,omitempty"`
+	HubName       string    `json:"hubName"`
 }
 
 // StaticVariablesActionPayload represents a payload for static variables actions
