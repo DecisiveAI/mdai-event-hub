@@ -41,5 +41,5 @@ type StaticVariablesActionPayload struct {
 	Variable  string `json:"variable"`
 	Type      string `json:"type"`
 	Operation string `json:"operation"`
-	Value     any    `json:"value"`
+	Data      any    `json:"data"`
 }
