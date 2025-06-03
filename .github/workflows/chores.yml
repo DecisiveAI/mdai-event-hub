@@ -207,11 +207,11 @@ jobs:
         run: |
           echo "Token length: ${#GH_TOKEN}"
           echo "Token starts with: ${GH_TOKEN:0:4}"
-      - name: Test API access
-        env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-        run: |
-          gh api repos/decisiveai/platform-health
+#      - name: Test API access
+#        env:
+#          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+#        run: |
+#          gh api repos/decisiveai/platform-health
       - name: Test token repo access
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
