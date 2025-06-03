@@ -196,7 +196,7 @@ func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInt
 		zap.String("queue", eventing.EventQueueName))
 
 	initializer := func() (eventing.EventHubInterface, error) {
-		return eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
+		return eventing.NewEventHub("amqp://"+rmqUser+":"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
 	}
 
 	return RetryInitializer(

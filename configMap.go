@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	v1 "github.com/decisiveai/mdai-operator/api/v1"
 	"log"
 	"os"
 	"sync"
@@ -44,11 +43,6 @@ type ConfigMapFetcher struct {
 }
 
 func NewConfigMapManager(suffix string) (*ConfigMapManager, error) {
-	// Create in-cluster config
-	//config, err := rest.InClusterConfig()
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to create in-cluster config: %v", err)
-	//}
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
