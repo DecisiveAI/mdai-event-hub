@@ -205,28 +205,6 @@ jobs:
             mdai-event-hub
             platform-health
 
-      - name: Check app details
-        run: |
-          echo "App ID length: ${#APP_ID}"
-          echo "Private key starts with: ${PRIVATE_KEY:0:30}"
-        env:
-          APP_ID: ${{ secrets.APP_ID }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-      - name: Debug token generation
-        run: |
-          echo "Token exists: ${{ steps.generate_token.outputs.token != '' }}"
-          echo "Token length: ${#GH_TOKEN}"
-          echo "Token starts with: ${GH_TOKEN:0:4}"
-        env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-
-      - name: List all installations
-        env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-        run: |
-          echo "Current installation ID:"
-          gh api installation | jq '.id, .account.login, .repository_selection'
-
       - name: Publish coverage to remote repository
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
@@ -276,7 +254,7 @@ jobs:
         if: steps.generate-badge.outcome == 'success'
         id: verify-changed-readme
         run: |
-          git fetch origin ${{ github.ref_name }}
+          git fetch origin dj/housekeeping
           if false; then
             echo "README.md has NOT changed."
             echo "readme_changed=false" >> $GITHUB_ENV
@@ -290,13 +268,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git fetch origin ${{ github.ref_name }}
-          git checkout ${{ github.ref_name }}
-          git pull origin ${{ github.ref_name }}
+          git fetch origin dj/housekeeping
+          git checkout dj/housekeeping
+          git pull origin dj/housekeeping
 
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
           git add README.md
           git commit -m "chore: Updated coverage badge. [skip ci]" || echo "No changes to commit"
-          git push origin ${{ github.ref_name }}
+          git push origin dj/housekeeping
