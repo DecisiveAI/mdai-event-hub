@@ -207,16 +207,11 @@ jobs:
         run: |
           echo "Token length: ${#GH_TOKEN}"
           echo "Token starts with: ${GH_TOKEN:0:4}"
-#      - name: Test API access
-#        env:
-#          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-#        run: |
-#          gh api repos/decisiveai/platform-health
-      - name: Test token repo access
+      - name: List accessible repos
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          gh api user/repos --paginate | jq '.[].full_name' | head -10
+          gh api installation/repositories | jq '.repositories[].full_name'
 
       - name: Publish coverage to remote repository
         env:
