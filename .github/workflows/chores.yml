@@ -112,12 +112,14 @@ jobs:
       baseline_found: ${{ steps.find.outputs.baseline_found }}
       baseline_path: ${{ steps.find.outputs.baseline_path }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Find latest coverage artifact on main
         id: find
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Look for the latest coverage artifact on main
           ARTIFACT=$(gh api -X GET "repos/${{ github.repository }}/actions/artifacts" \
             --jq '[.artifacts[] | select(.name=="code-coverage" and .workflow_run.head_branch=="main")] | sort_by(.updated_at) | last')
 
@@ -130,7 +132,7 @@ jobs:
           
             # Download the baseline coverage
             RUN_ID=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
-            gh run download $RUN_ID --name=main-coverage --dir=baseline-coverage
+            gh run download $RUN_ID --name=code-coverage --dir=baseline-coverage
             echo "baseline_path=baseline-coverage/coverage.out" >> "$GITHUB_OUTPUT"
           fi
 
@@ -206,7 +208,7 @@ jobs:
   main-coverage:
     name: Generate coverage report on main
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [ test ]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Clone the code
@@ -223,25 +225,32 @@ jobs:
           name: code-coverage
           path: .
 
+      - name: Generate test coverage report
+        id: coverage
+        uses: vladopajic/go-test-coverage@v2
+        with:
+          config: ./.github/.testcoverage.yml
+          profile: coverage.out
+
+      - name: Save coverage report to file
+        run: |
+          echo '${{ fromJSON(steps.coverage.outputs.report) }}' > coverage-${REPO_NAME}.txt
+
       - name: Publish coverage to remote repository
         env:
           GH_TOKEN: ${{ secrets.COVERAGE_REPO_TOKEN }}
         run: |
-          # Generate coverage report
-          go install github.com/axw/gocov/gocov@latest
-          gocov convert coverage.out | gocov report > coverage-${REPO_NAME}.txt
-
           # Clone the coverage repository
           git clone https://x-access-token:${GH_TOKEN}@github.com/${COVERAGE_REPO}.git coverage-repo
           cd coverage-repo
-          
+
           # Configure git
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          
+
           # Copy the new coverage file
           cp ../coverage-${REPO_NAME}.txt .
-          
+
           # Commit and push changes
           git add coverage-${REPO_NAME}.txt
           if git diff --cached --quiet; then
