@@ -153,7 +153,7 @@ func handleManualVariablesActions(ctx context.Context, mdai MdaiInterface, event
 	mdai.logger.Info("Received static variable payload", zap.Any("Value", payloadObj.Data))
 	switch payloadObj.DataType {
 	case "set":
-		values, ok := payloadObj.Data.([]interface{})
+		values, ok := payloadObj.Data.([]any)
 		if !ok {
 			return fmt.Errorf("data should be a list of strings")
 		}
