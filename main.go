@@ -77,7 +77,7 @@ func ProcessEvent(ctx context.Context, client valkey.Client, configMgr ConfigMap
 		logger.Info(fmt.Sprintf("Processing event %s", event.Name))
 		// Handle static variables
 		if event.Source == eventing.ManualVariablesEventSource {
-			err := handleManualVariablesActions(mdaiInterface, event)
+			err := handleManualVariablesActions(ctx, mdaiInterface, event)
 			if err != nil {
 				return err
 			}

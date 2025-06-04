@@ -141,8 +141,7 @@ func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEven
 	return nil
 }
 
-func handleManualVariablesActions(mdai MdaiInterface, event eventing.MdaiEvent) error {
-	ctx := context.Background()
+func handleManualVariablesActions(ctx context.Context, mdai MdaiInterface, event eventing.MdaiEvent) error {
 	var payloadObj eventing.ManualVariablesActionPayload
 	if err := json.Unmarshal([]byte(event.Payload), &payloadObj); err != nil {
 		return err
