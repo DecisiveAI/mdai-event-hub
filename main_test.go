@@ -257,8 +257,8 @@ func TestProcessEventPayload_Success(t *testing.T) {
 
 	assert.Equal(t, "value1", result["key1"])
 	assert.Equal(t, float64(42), result["key2"])
-	nested, ok := result["nested"].(map[string]interface{})
-	assert.True(t, ok, "expected nested to be a map[string]interface{}")
+	nested, ok := result["nested"].(map[string]any)
+	assert.True(t, ok, "expected nested to be a map[string]any")
 	assert.Equal(t, "val", nested["sub"])
 }
 
