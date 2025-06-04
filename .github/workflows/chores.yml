@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   go-ci:
-    uses: DecisiveAI/ci/.github/workflows/go-ci.yml@dj/ENG-595-housekeeping-fix-code-coverage-comments-collection
+    uses: DecisiveAI/ci/.github/workflows/go-ci.yml@f2e1e3d
     secrets:
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
       PLATFORM_HEALTH_ACCESS_APP_ID: ${{ vars.PLATFORM_HEALTH_ACCESS_APP_ID }}
