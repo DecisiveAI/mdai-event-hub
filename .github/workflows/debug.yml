@@ -1,0 +1,11 @@
+name: Debug CI Call
+
+on:
+  workflow_dispatch:
+
+jobs:
+  call-shared-workflow:
+    uses: DecisiveAI/ci/.github/workflows/go-ci.yml@your-branch
+    secrets:
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+      PLATFORM_HEALTH_ACCESS_APP_ID: ${{ vars.PLATFORM_HEALTH_ACCESS_APP_ID }}
