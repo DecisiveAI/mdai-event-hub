@@ -79,7 +79,7 @@ func ProcessEvent(ctx context.Context, client valkey.Client, configMgr ConfigMap
 
 		workflowMap, err := configMgr.GetConfigMapForHub(ctx, event.HubName)
 		if err != nil {
-			return fmt.Errorf("error getting ConfigMap for hub %s: %v", event.HubName, err)
+			return fmt.Errorf("error getting ConfigMap for hub %s: %w", event.HubName, err)
 		}
 
 		var workflowFound bool
