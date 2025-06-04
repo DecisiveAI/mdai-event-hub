@@ -24,7 +24,6 @@ var (
 
 const (
 	rabbitmqEndpointEnvVarKey = "RABBITMQ_ENDPOINT"
-	rabbitmqUserEnvVarKey     = "RABBITMQ_USER"
 	rabbitmqPasswordEnvVarKey = "RABBITMQ_PASSWORD"
 
 	valkeyEndpointEnvVarKey = "VALKEY_ENDPOINT"
@@ -208,7 +207,6 @@ func initValKeyClient(ctx context.Context, logger *zap.Logger) (valkey.Client, e
 
 func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInterface, error) {
 	rmqEndpoint := getEnvVariableWithDefault(rabbitmqEndpointEnvVarKey, "")
-	rmqUser := getEnvVariableWithDefault(rabbitmqUserEnvVarKey, "")
 	rmqPassword := getEnvVariableWithDefault(rabbitmqPasswordEnvVarKey, "")
 
 	logger.Info("Connecting to RabbitMQ",
@@ -216,7 +214,7 @@ func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInt
 		zap.String("queue", eventing.EventQueueName))
 
 	initializer := func() (eventing.EventHubInterface, error) {
-		return eventing.NewEventHub("amqp://"+rmqUser+":"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
+		return eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
 	}
 
 	return RetryInitializer(
