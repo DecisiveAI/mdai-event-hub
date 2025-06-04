@@ -7,8 +7,8 @@ import (
 )
 
 type MdaiInterface struct {
-	Logger   *zap.Logger
-	Datacore *datacore.HandlerAdapter
+	logger *zap.Logger
+	data   *datacore.HandlerAdapter
 }
 
 type HandlerName string

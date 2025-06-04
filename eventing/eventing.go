@@ -133,9 +133,9 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 	h.mu.Unlock()
 
 	err := h.ch.Qos(
-		1,     // prefetch count
-		0,     // prefetch size
-		false, // global
+		5, // this number has to be tuned after load testing
+		0,
+		false,
 	)
 	if err != nil {
 		h.mu.Lock()
@@ -145,13 +145,13 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 	}
 
 	msgs, err := h.ch.Consume(
-		h.queueName, // queue
-		"",          // consumer
-		false,       // auto-ack - changed to false for manual acks
-		false,       // exclusive
-		false,       // no-local
-		false,       // no-wait
-		nil,         // args
+		h.queueName,
+		"",
+		false, // auto-ack - changed to false for manual acks
+		false,
+		false,
+		false,
+		nil,
 	)
 	if err != nil {
 		h.mu.Lock()
@@ -177,13 +177,13 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 				}
 				return
 
-			case d, ok := <-msgs:
+			case delivery, ok := <-msgs:
 				if !ok {
 					h.logger.Warn("Message channel closed")
 					return
 				}
 
-				h.logger.Info("Received message", zap.Int("size", len(d.Body)))
+				h.logger.Info("Received message", zap.Int("size", len(delivery.Body)))
 
 				h.processingWg.Add(1)
 
@@ -227,7 +227,7 @@ func (h *EventHub) StartListening(invoker HandlerInvoker) error {
 							zap.String("eventName", event.Name),
 							zap.String("hubName", event.HubName))
 					}
-				}(d)
+				}(delivery)
 			}
 		}
 	}()
