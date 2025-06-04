@@ -1,11 +1,18 @@
-name: Debug CI Call
+name: CI
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
-  call-shared-workflow:
-    uses: DecisiveAI/ci/.github/workflows/go-ci.yml@your-branch
+  go-ci:
+    uses: DecisiveAI/ci/.github/workflows/go-ci.yml@dj/ENG-595-housekeeping-fix-code-coverage-comments-collection
     secrets:
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
       PLATFORM_HEALTH_ACCESS_APP_ID: ${{ vars.PLATFORM_HEALTH_ACCESS_APP_ID }}
