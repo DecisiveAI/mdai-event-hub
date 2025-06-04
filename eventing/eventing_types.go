@@ -83,3 +83,12 @@ func createEventUuid() string {
 	id := uuid.New()
 	return id.String()
 }
+
+// ManualVariablesActionPayload represents a payload for static variables actions
+type ManualVariablesActionPayload struct {
+	HubName     string `json:"hubName"`
+	VariableRef string `json:"variableRef"`
+	DataType    string `json:"dataType"`
+	Operation   string `json:"operation"`
+	Data        any    `json:"data"`
+}
