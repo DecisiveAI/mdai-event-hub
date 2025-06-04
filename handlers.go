@@ -30,7 +30,7 @@ func processEventPayload(event eventing.MdaiEvent) (map[string]interface{}, erro
 		return map[string]any{}, nil
 	}
 
-	var payloadData map[string]interface{}
+	var payloadData map[string]any
 
 	err := json.Unmarshal([]byte(event.Payload), &payloadData)
 	if err != nil {
