@@ -27,7 +27,7 @@ var SupportedHandlers = HandlerMap{
 
 func processEventPayload(event eventing.MdaiEvent) (map[string]interface{}, error) {
 	if event.Payload == "" {
-		return map[string]interface{}{}, nil
+		return map[string]any{}, nil
 	}
 
 	var payloadData map[string]interface{}
