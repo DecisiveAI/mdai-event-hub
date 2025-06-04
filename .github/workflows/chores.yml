@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   go-ci:
     uses: DecisiveAI/ci/.github/workflows/go-ci.yml@dj/ENG-595-housekeeping-fix-code-coverage-comments-collection
