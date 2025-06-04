@@ -33,7 +33,6 @@ const (
 	valkeyPasswordEnvVarKey = "VALKEY_PASSWORD"
 
 	automationConfigMapNamePostfix = "-automation"
-	staticVariablesEventSource     = "static_variable_api"
 )
 
 func init() {
@@ -77,8 +76,8 @@ func ProcessEvent(ctx context.Context, client valkey.Client, configMgr ConfigMap
 		var workflowFound = false
 		logger.Info(fmt.Sprintf("Processing event %s", event.Name))
 		// Handle static variables
-		if event.Source == staticVariablesEventSource {
-			err := handleStaticVariablesActions(mdaiInterface, event)
+		if event.Source == eventing.ManualVariablesEventSource {
+			err := handleManualVariablesActions(mdaiInterface, event)
 			if err != nil {
 				return err
 			}

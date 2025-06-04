@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	EventQueueName = "mdai-events"
+	EventQueueName             = "mdai-events"
+	ManualVariablesEventSource = "manual_variables_api"
 )
 
 // NewEventHub creates a new connection to eventing lib
