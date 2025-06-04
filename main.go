@@ -27,6 +27,7 @@ var (
 
 const (
 	rabbitmqEndpointEnvVarKey = "RABBITMQ_ENDPOINT"
+	rabbitmqUserEnvVarKey     = "RABBITMQ_USER"
 	rabbitmqPasswordEnvVarKey = "RABBITMQ_PASSWORD"
 
 	valkeyEndpointEnvVarKey = "VALKEY_ENDPOINT"
@@ -75,8 +76,14 @@ func ProcessEvent(ctx context.Context, client valkey.Client, configMgr ConfigMap
 
 		var workflowFound = false
 		logger.Info(fmt.Sprintf("Processing event %s", event.Name))
-		// Match on whole name, e.g. "NoisyServiceAlert.firing"
-		if workflow, exists := workflowMap[event.Name]; exists {
+		// Handle static variables
+		if event.Source == eventing.ManualVariablesEventSource {
+			err := handleManualVariablesActions(ctx, mdaiInterface, event)
+			if err != nil {
+				return err
+			}
+			// Match on whole name, e.g. "NoisyServiceAlert.firing"
+		} else if workflow, exists := workflowMap[event.Name]; exists {
 			workflowFound = true
 			for _, automationStep := range workflow {
 				err := safePerformAutomationStep(mdaiInterface, automationStep, event)
@@ -132,6 +139,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Initialize ValKeyClient with retry logic
 	valkeyClient, err := initValKeyClient(ctx, logger)
 	if err != nil {
 		logger.Fatal("failed to get valkey client", zap.Error(err))
@@ -183,6 +191,7 @@ func initValKeyClient(ctx context.Context, logger *zap.Logger) (valkey.Client, e
 
 func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInterface, error) {
 	rmqEndpoint := getEnvVariableWithDefault(rabbitmqEndpointEnvVarKey, "")
+	rmqUser := getEnvVariableWithDefault(rabbitmqUserEnvVarKey, "")
 	rmqPassword := getEnvVariableWithDefault(rabbitmqPasswordEnvVarKey, "")
 
 	hubUrl := (&url.URL{
@@ -196,7 +205,7 @@ func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInt
 		zap.String("queue", eventing.EventQueueName))
 
 	initializer := func() (eventing.EventHubInterface, error) {
-		return eventing.NewEventHub(hubUrl, eventing.EventQueueName, logger)
+		return eventing.NewEventHub("amqp://"+rmqUser+":"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
 	}
 
 	return RetryInitializer(
