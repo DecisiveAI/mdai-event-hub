@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"log"
-
 	datacore "github.com/decisiveai/mdai-data-core/handlers"
 	"github.com/decisiveai/mdai-event-hub/eventing"
 	v1 "github.com/decisiveai/mdai-operator/api/v1"
@@ -26,7 +24,6 @@ var (
 
 const (
 	rabbitmqEndpointEnvVarKey = "RABBITMQ_ENDPOINT"
-	rabbitmqUserEnvVarKey     = "RABBITMQ_USER"
 	rabbitmqPasswordEnvVarKey = "RABBITMQ_PASSWORD"
 
 	valkeyEndpointEnvVarKey = "VALKEY_ENDPOINT"
@@ -58,67 +55,87 @@ func ProcessEvent(ctx context.Context, client valkey.Client, configMgr ConfigMap
 	dataAdapter := datacore.NewHandlerAdapter(client, zapr.NewLogger(logger))
 
 	mdaiInterface := MdaiInterface{
-		Datacore: dataAdapter,
-		Logger:   logger,
+		data:   dataAdapter,
+		logger: logger,
 	}
+
 	return func(event eventing.MdaiEvent) error {
 		hubName := event.HubName
 		if hubName == "" {
 			return fmt.Errorf("no hub name provided")
 		}
-		log.Printf("Processing event for hub: %s", event.HubName)
+		logger.Info("Processing event for hub",
+			zap.String("hubName", event.HubName),
+			zap.String("eventName", event.Name),
+		)
 
-		workflowMap, err := configMgr.GetConfigMapForHub(ctx, event.HubName)
-		if err != nil {
-			return fmt.Errorf("error getting ConfigMap for hub %s: %v", event.HubName, err)
-		}
-
-		var workflowFound = false
-		logger.Info(fmt.Sprintf("Processing event %s", event.Name))
-		// Handle static variables
 		if event.Source == eventing.ManualVariablesEventSource {
 			err := handleManualVariablesActions(ctx, mdaiInterface, event)
 			if err != nil {
 				return err
 			}
-			// Match on whole name, e.g. "NoisyServiceAlert.firing"
-		} else if workflow, exists := workflowMap[event.Name]; exists {
+			return nil
+		}
+
+		workflowMap, err := configMgr.GetConfigMapForHub(ctx, event.HubName)
+		if err != nil {
+			return fmt.Errorf("error getting ConfigMap for hub %s: %w", event.HubName, err)
+		}
+
+		var workflowFound bool
+		var steps []v1.AutomationStep
+		// Match on whole name, e.g. "NoisyServiceAlert.firing"
+		if workflow, exists := workflowMap[event.Name]; exists {
 			workflowFound = true
-			for _, automationStep := range workflow {
-				err := safePerformAutomationStep(mdaiInterface, automationStep, event)
-				if err != nil {
-					return err
-				}
-			}
+			steps = workflow
 			// Match on alert name regardless of status, e.g. NoisyServiceAlert
 		} else if nameparts := strings.Split(event.Name, "."); len(nameparts) > 1 {
 			if workflow, exists := workflowMap[nameparts[0]]; exists {
 				workflowFound = true
-				for _, automationStep := range workflow {
-					err := safePerformAutomationStep(mdaiInterface, automationStep, event)
-					if err != nil {
-						return err
-					}
-				}
+				steps = workflow
 			}
 		}
 
 		if !workflowFound {
-			logger.Info("No configured automation for event", zap.String("name", event.Name))
+			logger.Warn("No configured automation for event", zap.String("name", event.Name))
 			return nil // Don't treat this as an error, just log a warning
+		}
+
+		for _, automationStep := range steps {
+			if err := safePerformAutomationStep(mdaiInterface, automationStep, event); err != nil {
+				logger.Error("Automation step failed",
+					zap.String("hubName", event.HubName),
+					zap.String("name", event.Name),
+					zap.String("handlerRef", automationStep.HandlerRef),
+					zap.Error(err),
+				)
+				return err
+			}
 		}
 		return nil
 	}
 }
 
-func safePerformAutomationStep(mdai MdaiInterface, autoStep v1.AutomationStep, event eventing.MdaiEvent) error {
-	args := autoStep.Arguments
+func safePerformAutomationStep(mdai MdaiInterface, autoStep v1.AutomationStep, event eventing.MdaiEvent) (err error) {
+	// handle panics
+	defer func() {
+		if r := recover(); r != nil {
+			mdai.logger.Error(
+				"Panic inside automation handler",
+				zap.Any("panicValue", r),
+				zap.String("handlerRef", autoStep.HandlerRef),
+				zap.String("eventName", event.Name),
+				zap.String("hubName", event.HubName),
+			)
+			err = fmt.Errorf("panic in handler %s: %v", autoStep.HandlerRef, r)
+		}
+	}()
+
 	handlerName := HandlerName(autoStep.HandlerRef)
 
 	if handlerFn, exists := SupportedHandlers[handlerName]; exists {
 		// TODO add event audit here
-		err := handlerFn(mdai, event, args)
-		if err != nil {
+		if err := handlerFn(mdai, event, autoStep.Arguments); err != nil {
 			return fmt.Errorf("handler %s failed: %w", handlerName, err)
 		}
 		return nil
@@ -134,7 +151,6 @@ func getEnvVariableWithDefault(key, defaultValue string) string {
 }
 
 func main() {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -143,6 +159,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to get valkey client", zap.Error(err))
 	}
+	defer valkeyClient.Close()
 
 	hub, err := initEventHub(ctx, logger)
 	if err != nil {
@@ -190,7 +207,6 @@ func initValKeyClient(ctx context.Context, logger *zap.Logger) (valkey.Client, e
 
 func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInterface, error) {
 	rmqEndpoint := getEnvVariableWithDefault(rabbitmqEndpointEnvVarKey, "")
-	rmqUser := getEnvVariableWithDefault(rabbitmqUserEnvVarKey, "")
 	rmqPassword := getEnvVariableWithDefault(rabbitmqPasswordEnvVarKey, "")
 
 	logger.Info("Connecting to RabbitMQ",
@@ -198,7 +214,7 @@ func initEventHub(ctx context.Context, logger *zap.Logger) (eventing.EventHubInt
 		zap.String("queue", eventing.EventQueueName))
 
 	initializer := func() (eventing.EventHubInterface, error) {
-		return eventing.NewEventHub("amqp://"+rmqUser+":"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
+		return eventing.NewEventHub("amqp://mdai:"+rmqPassword+"@"+rmqEndpoint+"/", eventing.EventQueueName, logger)
 	}
 
 	return RetryInitializer(
