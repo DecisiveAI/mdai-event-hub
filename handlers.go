@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	HandleAddNoisyServiceToSet      HandlerName = "HandleAddNoisyServiceToSet"
-	HandleRemoveNoisyServiceFromSet HandlerName = "HandleRemoveNoisyServiceFromSet"
-	HandleNoisyServiceAlert         HandlerName = "HandleNoisyServiceAlert"
+	HandleAddToSet              HandlerName = "HandleAddToSet"
+	HandleRemoveFromSet         HandlerName = "HandleRemoveFromSet"
+	HandleUpdateSetByComparable HandlerName = "HandleUpdateSetByComparable"
 )
 
 // SupportedHandlers Go doesn't support dynamic accessing of exports. So this is a workaround.
@@ -20,9 +20,9 @@ const (
 // To enforce this, handlers are declared with a lower case first character so they
 // are not exported directly but can only be accessed through the map
 var SupportedHandlers = HandlerMap{
-	HandleAddNoisyServiceToSet:      handleAddNoisyServiceToSet,
-	HandleRemoveNoisyServiceFromSet: handleRemoveNoisyServiceFromSet,
-	HandleNoisyServiceAlert:         handleNoisyServiceList,
+	HandleAddToSet:              handleAddToSet,
+	HandleRemoveFromSet:         handleRemoveFromSet,
+	HandleUpdateSetByComparable: handleUpdateSetByComparable,
 }
 
 func processEventPayload(event eventing.MdaiEvent) (map[string]interface{}, error) {
@@ -61,13 +61,13 @@ func getString(m map[string]any, key string) (string, error) {
 	return s, nil
 }
 
-func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
+func handleUpdateSetByComparable(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
 	ctx := context.Background()
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
 	}
-	mdai.logger.Debug("handleNoisyServiceList ", zap.Any("event", event), zap.Any("payload", payloadData), zap.Any("args", args))
+	mdai.logger.Debug("handleUpdateSetByComparable ", zap.Any("event", event), zap.Any("payload", payloadData), zap.Any("args", args))
 
 	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
 	payloadComparableKey := getArgsValueWithDefault("payload_comparable_ref", "status", args)
@@ -97,13 +97,13 @@ func handleNoisyServiceList(mdai MdaiInterface, event eventing.MdaiEvent, args m
 	return nil
 }
 
-func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
+func handleAddToSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
 	ctx := context.Background()
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
 	}
-	mdai.logger.Debug("handleAddNoisyServiceToSet ", zap.Any("event", event), zap.Any("payload", payloadData), zap.Any("args", args))
+	mdai.logger.Debug("handleAddToSet ", zap.Any("event", event), zap.Any("payload", payloadData), zap.Any("args", args))
 
 	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
 	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
@@ -121,13 +121,13 @@ func handleAddNoisyServiceToSet(mdai MdaiInterface, event eventing.MdaiEvent, ar
 	return nil
 }
 
-func handleRemoveNoisyServiceFromSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
+func handleRemoveFromSet(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
 	ctx := context.Background()
 	payloadData, err := processEventPayload(event)
 	if err != nil {
 		return fmt.Errorf("failed to process payload: %w", err)
 	}
-	mdai.logger.Debug("handleRemoveNoisyServiceFromSet ", zap.Any("event", event), zap.Any("payload", payloadData), zap.Any("args", args))
+	mdai.logger.Debug("handleRemoveFromSet ", zap.Any("event", event), zap.Any("payload", payloadData), zap.Any("args", args))
 
 	payloadValueKey := getArgsValueWithDefault("payload_val_ref", "service_name", args)
 	variableRef := getArgsValueWithDefault("variable_ref", "service_list", args)
