@@ -12,7 +12,7 @@ import (
 const (
 	HandleAddToSet              HandlerName = "HandleAddToSet"
 	HandleRemoveFromSet         HandlerName = "HandleRemoveFromSet"
-	HandleUpdateSetByComparable HandlerName = "HandleUpdateSetByComparable"
+	HandleUpdateSetByComparison HandlerName = "HandleUpdateSetByComparison"
 )
 
 // SupportedHandlers Go doesn't support dynamic accessing of exports. So this is a workaround.
@@ -22,7 +22,7 @@ const (
 var SupportedHandlers = HandlerMap{
 	HandleAddToSet:              handleAddToSet,
 	HandleRemoveFromSet:         handleRemoveFromSet,
-	HandleUpdateSetByComparable: handleUpdateSetByComparable,
+	HandleUpdateSetByComparison: handleUpdateSetByComparison,
 }
 
 func processEventPayload(event eventing.MdaiEvent) (map[string]interface{}, error) {
@@ -61,7 +61,7 @@ func getString(m map[string]any, key string) (string, error) {
 	return s, nil
 }
 
-func handleUpdateSetByComparable(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
+func handleUpdateSetByComparison(mdai MdaiInterface, event eventing.MdaiEvent, args map[string]string) error {
 	ctx := context.Background()
 	payloadData, err := processEventPayload(event)
 	if err != nil {
