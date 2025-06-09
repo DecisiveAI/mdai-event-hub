@@ -12,7 +12,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-logr/zapr"
 	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -52,7 +51,7 @@ func init() {
 
 // ProcessEvent handles an MdaiEvent according to configured workflows
 func ProcessEvent(ctx context.Context, client valkey.Client, configMgr ConfigMapManagerInterface, logger *zap.Logger) eventing.HandlerInvoker {
-	dataAdapter := datacore.NewHandlerAdapter(client, zapr.NewLogger(logger))
+	dataAdapter := datacore.NewHandlerAdapter(client, logger)
 
 	mdaiInterface := MdaiInterface{
 		data:   dataAdapter,
