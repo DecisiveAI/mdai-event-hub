@@ -8,6 +8,7 @@ import (
 
 	"github.com/mydecisive/mdai-data-core/eventing"
 	"github.com/mydecisive/mdai-data-core/eventing/rule"
+	variables "github.com/mydecisive/mdai-data-core/variables"
 	"go.uber.org/zap"
 )
 
@@ -54,7 +55,7 @@ func (v *VarDeps) BuildCommandFromEvent(event eventing.MdaiEvent) ([]rule.Comman
 
 	v.Logger.Info("Building command from manual variable payload", zap.Reflect("value", payloadObj.Data))
 
-	cmdType, err := determineCommandType(payloadObj.DataType, payloadObj.Operation)
+	cmdType, err := determineCommandType(variables.DataType(payloadObj.DataType), payloadObj.Operation)
 	if err != nil {
 		return nil, err
 	}
@@ -154,12 +155,12 @@ func buildMapRemoveCommands(cmdType rule.CommandType, payload eventing.Variables
 	return commands, nil
 }
 
-func determineCommandType(dataType, operation string) (rule.CommandType, error) {
+func determineCommandType(dataType variables.DataType, operation string) (rule.CommandType, error) {
 	switch dataType {
-	case "string", "int", "boolean":
+	case variables.DataTypeString, variables.DataTypeInt, variables.DataTypeBoolean, variables.DataTypeFloat:
 		return rule.CmdVarScalarUpdate, nil
 	default:
-		t, err := rule.ParseCommandType("variable." + dataType + "." + operation)
+		t, err := rule.ParseCommandType("variable." + string(dataType) + "." + operation)
 		if err != nil {
 			return "", fmt.Errorf("parse command type from dataType=%q operation=%q: %w", dataType, operation, err)
 		}

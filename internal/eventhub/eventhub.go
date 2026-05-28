@@ -25,7 +25,7 @@ type EventHub struct {
 	Kube                kubernetes.Interface
 	MdaiClientset       mdaiclientset.HubV1Interface
 	AuditAdapter        *audit.AuditAdapter
-	ConfigMapController kube.ConfigMapStore
+	ConfigMapController kube.HubConfigMapStore
 	InterpolationEngine *interpolation.Engine
 	HopLimit            int
 }

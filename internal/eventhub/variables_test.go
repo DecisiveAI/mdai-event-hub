@@ -224,6 +224,26 @@ func TestHandleManualVariablesActions(t *testing.T) {
 			},
 		},
 		{
+			description: "set float operation",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"float","variableRef":"foobar","data":"3.14"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "SetStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
+				"value":          "3.14",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
 			description: "set bool operation",
 			event: eventing.MdaiEvent{
 				ID:            "testId",
