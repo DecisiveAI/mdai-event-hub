@@ -600,7 +600,7 @@ func TestProcessVariableEvent_BuildCommandError(t *testing.T) {
 	}
 	err := h.ProcessVariableEvent(context.Background())(ev)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "parse command type from dataType")
+	require.Contains(t, err.Error(), "unsupported dataType")
 }
 
 func TestProcessTriggerEvent_BadPayload(t *testing.T) {

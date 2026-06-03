@@ -61,6 +61,13 @@ func (m *mockHandlerAdapter) SetStringValue(_ context.Context, variableKey, hubN
 	return nil
 }
 
+func (m *mockHandlerAdapter) DeleteStringValue(_ context.Context, variableKey, hubName, correlationID string, recursionDepth int) error {
+	m.calls["DeleteStringValue"] = append(m.calls["DeleteStringValue"], map[string]string{
+		"variableKey": variableKey, "hubName": hubName, "correlationID": correlationID, "recursionDepth": strconv.Itoa(recursionDepth),
+	})
+	return nil
+}
+
 func newHubWithAdapter(t *testing.T) (*EventHub, *mockHandlerAdapter, *vkmock.Client) {
 	t.Helper()
 	ma := newMockAdapter()

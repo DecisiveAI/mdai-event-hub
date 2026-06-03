@@ -73,6 +73,16 @@ func (mh *MockHandlerAdapter) SetStringValue(_ context.Context, variableKey, hub
 	return nil
 }
 
+func (mh *MockHandlerAdapter) DeleteStringValue(_ context.Context, variableKey, hubName, correlationID string, recursionDepth int) error {
+	mh.append("DeleteStringValue", map[string]string{
+		"variableKey":    variableKey,
+		"hubName":        hubName,
+		"correlationID":  correlationID,
+		"recursionDepth": strconv.Itoa(recursionDepth),
+	})
+	return nil
+}
+
 // --- unexported helpers after exported methods ---
 
 func (mh *MockHandlerAdapter) append(op string, call map[string]string) {
@@ -259,6 +269,82 @@ func TestHandleManualVariablesActions(t *testing.T) {
 				"variableKey":    "foobar",
 				"hubName":        "barbaz",
 				"value":          "false",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
+			description: "remove int scalar deletes the key",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"int","operation":"remove","variableRef":"foobar"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "DeleteStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
+			description: "remove string scalar deletes the key",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"string","operation":"remove","variableRef":"foobar"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "DeleteStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
+			description: "remove float scalar deletes the key",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"float","operation":"remove","variableRef":"foobar"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "DeleteStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
+			description: "remove boolean scalar deletes the key",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"boolean","operation":"remove","variableRef":"foobar"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "DeleteStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
 				"correlationID":  "bob",
 				"recursionDepth": "1",
 			},

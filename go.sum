@@ -278,6 +278,10 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f h1:KUppIJq7/+SVif2QVs3tOP0zanoHgBEVAwHxUSIzRqU=
 github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
+github.com/mydecisive/mdai-data-core v0.4.2-0.20260603125031-90aab7c33074 h1:vxw8kN0AXkpPGSZXxMJF/LtbEKKSeWDPOSQeEHSbqUc=
+github.com/mydecisive/mdai-data-core v0.4.2-0.20260603125031-90aab7c33074/go.mod h1:7fc4g8P2mJBxHt+SxzP9I6E3rWTkpe0Wg6zCXSVWjOs=
+github.com/mydecisive/mdai-operator v0.2.18-0.20260603125611-b83be680f2ec h1:IGw6BdSlnAjxFuKLUMzCY5jyMqD1xNJWden9aJ0aNgk=
+github.com/mydecisive/mdai-operator v0.2.18-0.20260603125611-b83be680f2ec/go.mod h1:l/rz+k1I7lhSYhWjNRVbD7t9rAo2FGnnNcce18/4wD8=
 github.com/nats-io/jwt/v2 v2.8.0 h1:K7uzyz50+yGZDO5o772eRE7atlcSEENpL7P+b74JV1g=
 github.com/nats-io/jwt/v2 v2.8.0/go.mod h1:me11pOkwObtcBNR8AiMrUbtVOUGkqYjMQZ6jnSdVUIA=
 github.com/nats-io/nats-server/v2 v2.11.12 h1:jGDXTkcjqQ5fCRstwIxvv1K0RHfftFUoSCT/iIZcqOc=

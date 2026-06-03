@@ -2,18 +2,11 @@ module github.com/mydecisive/mdai-event-hub
 
 go 1.25.0
 
-// TEMPORARY: pointing at local data-core and operator for the variables.DataType migration.
-// Remove once data-core and operator release tagged versions including variables/types.go and bump the requires above.
-replace (
-	github.com/mydecisive/mdai-data-core => ../mdai-data-core
-	github.com/mydecisive/mdai-operator => ../mdai-operator
-)
-
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/mydecisive/mdai-data-core v0.3.1
-	github.com/mydecisive/mdai-operator v0.2.15
+	github.com/mydecisive/mdai-data-core v0.4.2-0.20260603125031-90aab7c33074
+	github.com/mydecisive/mdai-operator v0.2.18-0.20260603125611-b83be680f2ec
 	github.com/stretchr/testify v1.11.1
 	github.com/valkey-io/valkey-go v1.0.62
 	github.com/valkey-io/valkey-go/mock v1.0.62
