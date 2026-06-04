@@ -523,7 +523,7 @@ func TestProcessMdaiEvent_ConfigMapError(t *testing.T) {
 		Logger:   zap.NewNop(),
 		HopLimit: 10,
 	}
-	// Inject a failing store
+	// Inject a real fetch failure (a genuine error must still be dead-lettered, unlike not-found).
 	fs := kubetest.NewFakeConfigMapStore().FailGetByHubWith(errors.New("boom"))
 	h.ConfigMapController = fs
 
@@ -533,6 +533,21 @@ func TestProcessMdaiEvent_ConfigMapError(t *testing.T) {
 	}, h.Logger, h.matchedRulesByAlertCtx)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "error getting ConfigMap data for hub hub-x")
+}
+
+func TestProcessMdaiEvent_NoAutomationConfigMap_Skips(t *testing.T) {
+	h := &EventHub{
+		Logger:   zap.NewNop(),
+		HopLimit: 10,
+	}
+	// Hub with variables but no rules → no automation ConfigMap; the trigger must skip, not DLQ.
+	h.ConfigMapController = kubetest.NewFakeConfigMapStore()
+
+	err := h.processMdaiEvent(context.Background(), eventing.MdaiEvent{
+		Name:    "var.set",
+		HubName: "hub-no-rules",
+	}, h.Logger, h.matchedRulesByVariableCtx)
+	require.NoError(t, err)
 }
 
 func TestProcessMdaiEvent_BadPayload(t *testing.T) {
