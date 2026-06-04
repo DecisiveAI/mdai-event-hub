@@ -127,7 +127,7 @@ func (h *EventHub) processMdaiEvent(ctx context.Context, event eventing.MdaiEven
 		return nil
 	}
 
-	automationConfig, err := h.ConfigMapController.GetConfigMapByHubName(event.HubName)
+	automationConfig, err := h.ConfigMapController.GetConfigMapByHubName(event.HubName) //nolint:staticcheck // deprecated; migrate to GetAutomationConfigMapDataByHubName (tracked)
 	if err != nil {
 		return fmt.Errorf("error getting ConfigMap data for hub %s: %w", event.HubName, err)
 	}
