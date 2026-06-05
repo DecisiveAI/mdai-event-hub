@@ -25,7 +25,7 @@ type EventHub struct {
 	Kube                kubernetes.Interface
 	MdaiClientset       mdaiclientset.HubV1Interface
 	AuditAdapter        *audit.AuditAdapter
-	ConfigMapController kube.ConfigMapStore
+	ConfigMapController kube.HubConfigMapStore
 	InterpolationEngine *interpolation.Engine
 	HopLimit            int
 }
@@ -127,8 +127,13 @@ func (h *EventHub) processMdaiEvent(ctx context.Context, event eventing.MdaiEven
 		return nil
 	}
 
-	automationConfig, err := h.ConfigMapController.GetConfigMapByHubName(event.HubName)
+	automationConfig, err := h.ConfigMapController.GetConfigMapByHubName(event.HubName) //nolint:staticcheck // deprecated; migrate to GetAutomationConfigMapDataByHubName (tracked)
 	if err != nil {
+		// a hub may have no rules, so skip rather than dead-letter. Real fetch errors still propagate.
+		if strings.Contains(err.Error(), "no ConfigMap found for hub") {
+			logger.Warn("No automation ConfigMap for hub, skipping", zap.String("event_name", event.Name))
+			return nil
+		}
 		return fmt.Errorf("error getting ConfigMap data for hub %s: %w", event.HubName, err)
 	}
 

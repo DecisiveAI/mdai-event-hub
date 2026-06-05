@@ -21,6 +21,7 @@ var commandDispatch = map[rule.CommandType]cmdHandler{
 	rule.CmdVarSetAdd:       (*EventHub).cmdVarSetAdd,
 	rule.CmdVarSetRemove:    (*EventHub).cmdVarSetRemove,
 	rule.CmdVarScalarUpdate: (*EventHub).cmdVarScalarUpdate,
+	rule.CmdVarScalarRemove: (*EventHub).cmdVarScalarRemove,
 	rule.CmdVarMapAdd:       (*EventHub).cmdVarMapAdd,
 	rule.CmdVarMapRemove:    (*EventHub).cmdVarMapRemove,
 
@@ -162,6 +163,18 @@ func (h *EventHub) cmdVarMapRemove(
 
 func (h *EventHub) cmdVarScalarUpdate(ctx context.Context, ev eventing.MdaiEvent, _ string, cmd rule.Command, _ map[string]any) error {
 	return h.execVarScalarOp(ctx, string(rule.CmdVarScalarUpdate), ev, cmd, h.VarsAdapter.HandlerAdapter.SetStringValue)
+}
+
+func (h *EventHub) cmdVarScalarRemove(ctx context.Context, ev eventing.MdaiEvent, _ string, cmd rule.Command, _ map[string]any) error {
+	opName := rule.CmdVarScalarRemove.String()
+	var in mdaiv1.ScalarAction
+	if err := DecodeInputs(cmd.Inputs, &in); err != nil {
+		return fmt.Errorf("%s: decode: %w", opName, err)
+	}
+	if in.Scalar == "" {
+		return fmt.Errorf("%s: inputs.scalar is empty", opName)
+	}
+	return h.VarsAdapter.HandlerAdapter.DeleteStringValue(ctx, in.Scalar, ev.HubName, ev.CorrelationID, ev.RecursionDepth+1)
 }
 
 func (h *EventHub) execVarScalarOp(

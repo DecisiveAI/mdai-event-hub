@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/mydecisive/mdai-data-core/eventing"
+	"github.com/mydecisive/mdai-data-core/eventing/rule"
+	"github.com/mydecisive/mdai-data-core/variables"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -67,6 +69,16 @@ func (mh *MockHandlerAdapter) SetStringValue(_ context.Context, variableKey, hub
 		"variableKey":    variableKey,
 		"hubName":        hubName,
 		"value":          value,
+		"correlationID":  correlationID,
+		"recursionDepth": strconv.Itoa(recursionDepth),
+	})
+	return nil
+}
+
+func (mh *MockHandlerAdapter) DeleteStringValue(_ context.Context, variableKey, hubName, correlationID string, recursionDepth int) error {
+	mh.append("DeleteStringValue", map[string]string{
+		"variableKey":    variableKey,
+		"hubName":        hubName,
 		"correlationID":  correlationID,
 		"recursionDepth": strconv.Itoa(recursionDepth),
 	})
@@ -224,6 +236,26 @@ func TestHandleManualVariablesActions(t *testing.T) {
 			},
 		},
 		{
+			description: "set float operation",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"float","variableRef":"foobar","data":"3.14"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "SetStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
+				"value":          "3.14",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
 			description: "set bool operation",
 			event: eventing.MdaiEvent{
 				ID:            "testId",
@@ -239,6 +271,82 @@ func TestHandleManualVariablesActions(t *testing.T) {
 				"variableKey":    "foobar",
 				"hubName":        "barbaz",
 				"value":          "false",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
+			description: "remove int scalar deletes the key",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"int","operation":"remove","variableRef":"foobar"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "DeleteStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
+			description: "remove string scalar deletes the key",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"string","operation":"remove","variableRef":"foobar"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "DeleteStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
+			description: "remove float scalar deletes the key",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"float","operation":"remove","variableRef":"foobar"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "DeleteStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
+				"correlationID":  "bob",
+				"recursionDepth": "1",
+			},
+		},
+		{
+			description: "remove boolean scalar deletes the key",
+			event: eventing.MdaiEvent{
+				ID:            "testId",
+				Name:          "testName",
+				Payload:       `{"dataType":"boolean","operation":"remove","variableRef":"foobar"}`,
+				Source:        "testSource",
+				SourceID:      "testSourceId",
+				CorrelationID: "bob",
+				HubName:       "barbaz",
+			},
+			handlerName: "DeleteStringValue",
+			expected: map[string]string{
+				"variableKey":    "foobar",
+				"hubName":        "barbaz",
 				"correlationID":  "bob",
 				"recursionDepth": "1",
 			},
@@ -270,3 +378,35 @@ func TestHandleManualVariablesActions(t *testing.T) {
 }
 
 var _ HandlerAdapter = (*MockHandlerAdapter)(nil)
+
+func TestDetermineCommandType(t *testing.T) {
+	cases := []struct {
+		name      string
+		dataType  variables.DataType
+		operation string
+		want      rule.CommandType
+		wantErr   string
+	}{
+		{name: "scalar set maps to update", dataType: variables.DataTypeString, operation: "set", want: rule.CmdVarScalarUpdate},
+		{name: "scalar remove maps to remove", dataType: variables.DataTypeInt, operation: "remove", want: rule.CmdVarScalarRemove},
+		{name: "float remove maps to remove", dataType: variables.DataTypeFloat, operation: "remove", want: rule.CmdVarScalarRemove},
+		{name: "set add", dataType: variables.DataTypeSet, operation: "add", want: rule.CmdVarSetAdd},
+		{name: "map remove", dataType: variables.DataTypeMap, operation: "remove", want: rule.CmdVarMapRemove},
+		{name: "meta hashset is read-only", dataType: variables.DataTypeMetaHashSet, operation: "set", wantErr: "read-only"},
+		{name: "meta priority list is read-only", dataType: variables.DataTypeMetaPriorityList, operation: "remove", wantErr: "read-only"},
+		{name: "unknown data type is rejected", dataType: variables.DataType("bogus"), operation: "set", wantErr: "unsupported dataType"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := determineCommandType(tc.dataType, tc.operation)
+			if tc.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.wantErr)
+				require.Empty(t, got, "no command type should be produced on error")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}

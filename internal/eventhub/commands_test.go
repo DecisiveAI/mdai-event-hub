@@ -61,6 +61,13 @@ func (m *mockHandlerAdapter) SetStringValue(_ context.Context, variableKey, hubN
 	return nil
 }
 
+func (m *mockHandlerAdapter) DeleteStringValue(_ context.Context, variableKey, hubName, correlationID string, recursionDepth int) error {
+	m.calls["DeleteStringValue"] = append(m.calls["DeleteStringValue"], map[string]string{
+		"variableKey": variableKey, "hubName": hubName, "correlationID": correlationID, "recursionDepth": strconv.Itoa(recursionDepth),
+	})
+	return nil
+}
+
 func newHubWithAdapter(t *testing.T) (*EventHub, *mockHandlerAdapter, *vkmock.Client) {
 	t.Helper()
 	ma := newMockAdapter()
@@ -290,6 +297,47 @@ func TestCmdVarScalarUpdate_Success_Dispatch(t *testing.T) {
 	requireAdapterCall(t, ma, "SetStringValue", map[string]string{
 		"variableKey": "my-scalar", "hubName": "hub-scalar", "value": "v", "correlationID": "cid-scalar-1", "recursionDepth": "1",
 	})
+}
+
+func TestCmdVarScalarRemove_Success_Dispatch(t *testing.T) {
+	h, ma, _ := newHubWithAdapter(t)
+
+	ev := eventing.MdaiEvent{HubName: "hub-scalar", CorrelationID: "cid-rm-1"}
+	cmd := rule.Command{Type: rule.CmdVarScalarRemove, Inputs: json.RawMessage(`{"scalar":"my-scalar"}`)}
+
+	handler := commandDispatch[rule.CmdVarScalarRemove]
+	require.NotNil(t, handler)
+	require.NoError(t, handler(h, context.Background(), ev, "ns", cmd, nil))
+
+	requireAdapterCall(t, ma, "DeleteStringValue", map[string]string{
+		"variableKey": "my-scalar", "hubName": "hub-scalar", "correlationID": "cid-rm-1", "recursionDepth": "1",
+	})
+}
+
+func TestCmdVarScalarRemove_RejectsBadInputWithoutDeleting(t *testing.T) {
+	cases := []struct {
+		name   string
+		inputs string
+		errSub string
+	}{
+		{name: "empty scalar key", inputs: `{"scalar":""}`, errSub: "inputs.scalar is empty"},
+		{name: "malformed inputs", inputs: `}{`, errSub: "decode"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, ma, _ := newHubWithAdapter(t)
+			ev := eventing.MdaiEvent{HubName: "hub-x", CorrelationID: "cid-x"}
+			cmd := rule.Command{Type: rule.CmdVarScalarRemove, Inputs: json.RawMessage(tc.inputs)}
+
+			handler := commandDispatch[rule.CmdVarScalarRemove]
+			require.NotNil(t, handler)
+
+			err := handler(h, context.Background(), ev, "ns", cmd, nil)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.errSub)
+			require.Empty(t, ma.calls["DeleteStringValue"], "a rejected remove must not delete anything")
+		})
+	}
 }
 
 func TestProcessCommandsForEvent_Smoke(t *testing.T) {

@@ -47,7 +47,7 @@ func initDependencies(ctx context.Context, logger *zap.Logger) (eventHub *eventh
 		logger.Fatal("Failed to create mdai clientset", zap.Error(err))
 	}
 
-	configMgr, err := dcorekube.NewConfigMapController([]string{dcorekube.AutomationConfigMapType}, corev1.NamespaceAll, clientset, logger)
+	configMgr, err := dcorekube.NewHubConfigMapController([]string{dcorekube.AutomationConfigMapType}, corev1.NamespaceAll, clientset, logger)
 	if err != nil {
 		logger.Fatal("Failed to create ConfigMap manager", zap.Error(err))
 	}

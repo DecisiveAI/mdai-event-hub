@@ -8,6 +8,7 @@ import (
 
 	"github.com/mydecisive/mdai-data-core/eventing"
 	"github.com/mydecisive/mdai-data-core/eventing/rule"
+	"github.com/mydecisive/mdai-data-core/variables"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +18,7 @@ type HandlerAdapter interface {
 	SetMapEntry(ctx context.Context, variableKey, hubName, field, value, correlationID string, recursionDepth int) error
 	RemoveMapEntry(ctx context.Context, variableKey, hubName, field, correlationID string, recursionDepth int) error
 	SetStringValue(ctx context.Context, variableKey, hubName, value, correlationID string, recursionDepth int) error
+	DeleteStringValue(ctx context.Context, variableKey, hubName, correlationID string, recursionDepth int) error
 }
 
 type VarDeps struct {
@@ -54,7 +56,7 @@ func (v *VarDeps) BuildCommandFromEvent(event eventing.MdaiEvent) ([]rule.Comman
 
 	v.Logger.Info("Building command from manual variable payload", zap.Reflect("value", payloadObj.Data))
 
-	cmdType, err := determineCommandType(payloadObj.DataType, payloadObj.Operation)
+	cmdType, err := determineCommandType(variables.DataType(payloadObj.DataType), payloadObj.Operation)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +64,7 @@ func (v *VarDeps) BuildCommandFromEvent(event eventing.MdaiEvent) ([]rule.Comman
 	switch cmdType {
 	case rule.CmdVarSetAdd, rule.CmdVarSetRemove:
 		return buildSetCommands(cmdType, payloadObj)
-	case rule.CmdVarScalarUpdate:
+	case rule.CmdVarScalarUpdate, rule.CmdVarScalarRemove:
 		return buildScalarCommand(cmdType, payloadObj)
 	case rule.CmdVarMapAdd:
 		return buildMapAddCommands(cmdType, payloadObj)
@@ -97,12 +99,18 @@ func buildSetCommands(cmdType rule.CommandType, payload eventing.VariablesAction
 }
 
 func buildScalarCommand(cmdType rule.CommandType, payload eventing.VariablesActionPayload) ([]rule.Command, error) {
+	// Remove carries no value — the scalar key is unconditionally deleted.
+	if cmdType == rule.CmdVarScalarRemove {
+		inputs, err := json.Marshal(scalarInputs{Scalar: payload.VariableRef})
+		if err != nil {
+			return nil, fmt.Errorf("failed to build command inputs for scalar remove: %w", err)
+		}
+		return []rule.Command{{Type: cmdType, Inputs: inputs}}, nil
+	}
+
 	value, ok := payload.Data.(string)
 	if !ok {
 		return nil, errors.New("scalar data should be a string")
-	}
-	if payload.Operation == "remove" {
-		value = ""
 	}
 	inputs, err := json.Marshal(scalarInputs{Scalar: payload.VariableRef, Value: value})
 	if err != nil {
@@ -154,15 +162,25 @@ func buildMapRemoveCommands(cmdType rule.CommandType, payload eventing.Variables
 	return commands, nil
 }
 
-func determineCommandType(dataType, operation string) (rule.CommandType, error) {
+func determineCommandType(dataType variables.DataType, operation string) (rule.CommandType, error) {
 	switch dataType {
-	case "string", "int", "boolean":
+	case variables.DataTypeString,
+		variables.DataTypeInt,
+		variables.DataTypeBoolean,
+		variables.DataTypeFloat:
+		if operation == "remove" {
+			return rule.CmdVarScalarRemove, nil
+		}
 		return rule.CmdVarScalarUpdate, nil
-	default:
-		t, err := rule.ParseCommandType("variable." + dataType + "." + operation)
+	case variables.DataTypeSet, variables.DataTypeMap:
+		t, err := rule.ParseCommandType("variable." + string(dataType) + "." + operation)
 		if err != nil {
 			return "", fmt.Errorf("parse command type from dataType=%q operation=%q: %w", dataType, operation, err)
 		}
 		return t, nil
+	case variables.DataTypeMetaHashSet, variables.DataTypeMetaPriorityList:
+		return "", fmt.Errorf("variables of type %q are read-only and have no command type", dataType)
+	default:
+		return "", fmt.Errorf("unsupported dataType %q", dataType)
 	}
 }
