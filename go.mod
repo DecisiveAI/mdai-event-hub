@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/mydecisive/mdai-data-core v0.4.2
+	github.com/mydecisive/mdai-data-core v0.4.4
 	github.com/mydecisive/mdai-operator v0.2.20
 	github.com/stretchr/testify v1.11.1
 	github.com/valkey-io/valkey-go v1.0.62

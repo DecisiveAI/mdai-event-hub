@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/mydecisive/mdai-data-core/eventing"
 	"github.com/mydecisive/mdai-data-core/eventing/rule"
 	"github.com/mydecisive/mdai-data-core/eventing/triggers"
+	"github.com/mydecisive/mdai-data-core/handlers"
 	"github.com/mydecisive/mdai-data-core/kube"
 	"github.com/mydecisive/mdai-data-core/kube/kubetest"
 	"github.com/stretchr/testify/assert"
@@ -18,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valkey-io/valkey-go"
 	vkmock "github.com/valkey-io/valkey-go/mock"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -352,8 +355,16 @@ func TestMatchedRulesByVariableCtx(t *testing.T) {
 	h, _, _ := newHubWithAdapter(t)
 
 	rules := map[string]rule.Rule{
-		"ok":   {Name: "ok", Trigger: &triggers.VariableTrigger{Name: "my-set", UpdateType: "added"}},
-		"nope": {Name: "nope", Trigger: &triggers.VariableTrigger{Name: "other", UpdateType: "added"}},
+		"added-rule":   {Name: "added-rule", Trigger: &triggers.VariableTrigger{Name: "my-set", UpdateType: "added"}},
+		"removed-rule": {Name: "removed-rule", Trigger: &triggers.VariableTrigger{Name: "my-scalar", UpdateType: "removed"}},
+		"set-rule":     {Name: "set-rule", Trigger: &triggers.VariableTrigger{Name: "my-map", UpdateType: "set"}},
+		"nope":         {Name: "nope", Trigger: &triggers.VariableTrigger{Name: "other", UpdateType: "added"}},
+	}
+
+	mkPayload := func(ref, op string) string {
+		b, err := json.Marshal(eventing.VariablesActionPayload{VariableRef: ref, Operation: op})
+		require.NoError(t, err)
+		return string(b)
 	}
 
 	cases := []struct {
@@ -363,14 +374,10 @@ func TestMatchedRulesByVariableCtx(t *testing.T) {
 		want    string
 	}{
 		{"malformed", `{"not json"`, 0, ""},
-		{"match", func() string {
-			b, err := json.Marshal(eventing.VariablesActionPayload{
-				VariableRef: "my-set",
-				Operation:   "added",
-			})
-			require.NoError(t, err)
-			return string(b)
-		}(), 1, "ok"},
+		{"added fires added rule", mkPayload("my-set", "added"), 1, "added-rule"},
+		{"removed fires removed rule", mkPayload("my-scalar", "removed"), 1, "removed-rule"},
+		{"set fires set rule", mkPayload("my-map", "set"), 1, "set-rule"},
+		{"removed does not fire added rule", mkPayload("my-set", "removed"), 0, ""},
 	}
 
 	for _, tc := range cases {
@@ -383,6 +390,94 @@ func TestMatchedRulesByVariableCtx(t *testing.T) {
 			if tc.wantLen == 1 {
 				require.Equal(t, tc.want, res[0].Name)
 			}
+		})
+	}
+}
+
+type capturingPublisher struct{ events []eventing.MdaiEvent }
+
+func (c *capturingPublisher) Publish(_ context.Context, ev eventing.MdaiEvent, _ eventing.MdaiEventSubject) error {
+	c.events = append(c.events, ev)
+	return nil
+}
+
+func (c *capturingPublisher) Close() error { return nil }
+
+// TestPublishedVarOpsMatchRules drives the real publish→consume path: each operation's
+// published event must fire its ConfigMap-JSON rule's command. Only NATS transport is stubbed.
+func TestPublishedVarOpsMatchRules(t *testing.T) {
+	const hub = "hub-1"
+
+	cases := []struct {
+		name       string
+		varName    string
+		updateType string
+		invoke     func(t *testing.T, a *handlers.HandlerAdapter)
+	}{
+		{"set member add", "my-set", "added", func(t *testing.T, a *handlers.HandlerAdapter) {
+			require.NoError(t, a.AddElementToSet(t.Context(), "my-set", hub, "elem", "corr-1", 0))
+		}},
+		{"scalar set", "my-scalar", "set", func(t *testing.T, a *handlers.HandlerAdapter) {
+			require.NoError(t, a.SetStringValue(t.Context(), "my-scalar", hub, "v", "corr-1", 0))
+		}},
+		{"map entry set", "my-map", "set", func(t *testing.T, a *handlers.HandlerAdapter) {
+			require.NoError(t, a.SetMapEntry(t.Context(), "my-map", hub, "field", "v", "corr-1", 0))
+		}},
+		{"set member remove", "my-set", "removed", func(t *testing.T, a *handlers.HandlerAdapter) {
+			require.NoError(t, a.RemoveElementFromSet(t.Context(), "my-set", hub, "elem", "corr-1", 0))
+		}},
+		{"map key remove", "my-map", "removed", func(t *testing.T, a *handlers.HandlerAdapter) {
+			require.NoError(t, a.RemoveMapEntry(t.Context(), "my-map", hub, "field", "corr-1", 0))
+		}},
+		{"scalar delete", "my-scalar", "removed", func(t *testing.T, a *handlers.HandlerAdapter) {
+			require.NoError(t, a.DeleteStringValue(t.Context(), "my-scalar", hub, "corr-1", 0))
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, ma, client := newHubWithAdapter(t)
+			// Publish side: the variable update plus its audit command in one DoMulti.
+			client.EXPECT().DoMulti(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return([]valkey.ValkeyResult{
+					vkmock.Result(vkmock.ValkeyInt64(1)),
+					vkmock.Result(vkmock.ValkeyInt64(1)),
+				})
+			// Consume side: audit-history writes while the rule is processed.
+			client.EXPECT().Do(gomock.Any(), XaddMatcher{}).
+				Return(vkmock.Result(vkmock.ValkeyString(""))).AnyTimes()
+
+			cfg, ok := h.ConfigMapController.(*kubetest.FakeConfigMapStore)
+			require.True(t, ok, "expected FakeConfigMapStore")
+			ruleJSON := fmt.Sprintf(`{
+  "name": "r",
+  "trigger": { "kind": "variable", "spec": { "name": %q, "update_type": %q } },
+  "commands": [ { "type": "variable.scalar.update", "inputs": { "scalar": "out", "value": "fired" } } ]
+}`, tc.varName, tc.updateType)
+			cfg.SetHubConfigMaps(hub, []*corev1.ConfigMap{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cm-rules",
+					Namespace: "ns-1",
+					Labels: map[string]string{
+						kube.LabelMdaiHubName:   hub,
+						kube.ConfigMapTypeLabel: kube.AutomationConfigMapType,
+					},
+				},
+				Data: map[string]string{"r": ruleJSON},
+			}})
+			require.NoError(t, cfg.Run())
+
+			pub := &capturingPublisher{}
+			adapter := handlers.NewHandlerAdapter(client, zap.NewNop(), pub)
+			tc.invoke(t, adapter)
+			require.Len(t, pub.events, 1, "op should publish exactly one event")
+
+			require.NoError(t, h.ProcessTriggerEvent(t.Context())(pub.events[0]))
+
+			calls := ma.calls["SetStringValue"]
+			require.Len(t, calls, 1, "rule command did not execute for %s", pub.events[0].Name)
+			require.Equal(t, "out", calls[0]["variableKey"])
+			require.Equal(t, "fired", calls[0]["value"])
 		})
 	}
 }
