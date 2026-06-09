@@ -26,6 +26,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const cmRulesName = "cm-rules"
+
 type XaddMatcher struct{}
 
 func (XaddMatcher) Matches(x any) bool {
@@ -401,7 +403,7 @@ func (c *capturingPublisher) Publish(_ context.Context, ev eventing.MdaiEvent, _
 	return nil
 }
 
-func (c *capturingPublisher) Close() error { return nil }
+func (*capturingPublisher) Close() error { return nil }
 
 // TestPublishedVarOpsMatchRules drives the real publish→consume path: each operation's
 // published event must fire its ConfigMap-JSON rule's command. Only NATS transport is stubbed.
@@ -412,25 +414,25 @@ func TestPublishedVarOpsMatchRules(t *testing.T) {
 		name       string
 		varName    string
 		updateType string
-		invoke     func(t *testing.T, a *handlers.HandlerAdapter)
+		invoke     func(ctx context.Context, a *handlers.HandlerAdapter) error
 	}{
-		{"set member add", "my-set", "added", func(t *testing.T, a *handlers.HandlerAdapter) {
-			require.NoError(t, a.AddElementToSet(t.Context(), "my-set", hub, "elem", "corr-1", 0))
+		{"set member add", "my-set", "added", func(ctx context.Context, a *handlers.HandlerAdapter) error {
+			return a.AddElementToSet(ctx, "my-set", hub, "elem", "corr-1", 0)
 		}},
-		{"scalar set", "my-scalar", "set", func(t *testing.T, a *handlers.HandlerAdapter) {
-			require.NoError(t, a.SetStringValue(t.Context(), "my-scalar", hub, "v", "corr-1", 0))
+		{"scalar set", "my-scalar", "set", func(ctx context.Context, a *handlers.HandlerAdapter) error {
+			return a.SetStringValue(ctx, "my-scalar", hub, "v", "corr-1", 0)
 		}},
-		{"map entry set", "my-map", "set", func(t *testing.T, a *handlers.HandlerAdapter) {
-			require.NoError(t, a.SetMapEntry(t.Context(), "my-map", hub, "field", "v", "corr-1", 0))
+		{"map entry set", "my-map", "set", func(ctx context.Context, a *handlers.HandlerAdapter) error {
+			return a.SetMapEntry(ctx, "my-map", hub, "field", "v", "corr-1", 0)
 		}},
-		{"set member remove", "my-set", "removed", func(t *testing.T, a *handlers.HandlerAdapter) {
-			require.NoError(t, a.RemoveElementFromSet(t.Context(), "my-set", hub, "elem", "corr-1", 0))
+		{"set member remove", "my-set", "removed", func(ctx context.Context, a *handlers.HandlerAdapter) error {
+			return a.RemoveElementFromSet(ctx, "my-set", hub, "elem", "corr-1", 0)
 		}},
-		{"map key remove", "my-map", "removed", func(t *testing.T, a *handlers.HandlerAdapter) {
-			require.NoError(t, a.RemoveMapEntry(t.Context(), "my-map", hub, "field", "corr-1", 0))
+		{"map key remove", "my-map", "removed", func(ctx context.Context, a *handlers.HandlerAdapter) error {
+			return a.RemoveMapEntry(ctx, "my-map", hub, "field", "corr-1", 0)
 		}},
-		{"scalar delete", "my-scalar", "removed", func(t *testing.T, a *handlers.HandlerAdapter) {
-			require.NoError(t, a.DeleteStringValue(t.Context(), "my-scalar", hub, "corr-1", 0))
+		{"scalar delete", "my-scalar", "removed", func(ctx context.Context, a *handlers.HandlerAdapter) error {
+			return a.DeleteStringValue(ctx, "my-scalar", hub, "corr-1", 0)
 		}},
 	}
 
@@ -456,7 +458,7 @@ func TestPublishedVarOpsMatchRules(t *testing.T) {
 }`, tc.varName, tc.updateType)
 			cfg.SetHubConfigMaps(hub, []*corev1.ConfigMap{{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cm-rules",
+					Name:      cmRulesName,
 					Namespace: "ns-1",
 					Labels: map[string]string{
 						kube.LabelMdaiHubName:   hub,
@@ -469,7 +471,7 @@ func TestPublishedVarOpsMatchRules(t *testing.T) {
 
 			pub := &capturingPublisher{}
 			adapter := handlers.NewHandlerAdapter(client, zap.NewNop(), pub)
-			tc.invoke(t, adapter)
+			require.NoError(t, tc.invoke(t.Context(), adapter))
 			require.Len(t, pub.events, 1, "op should publish exactly one event")
 
 			require.NoError(t, h.ProcessTriggerEvent(t.Context())(pub.events[0]))
@@ -500,7 +502,7 @@ func TestProcessTriggerEvent_Success(t *testing.T) {
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "cm-rules",
+			Name:      cmRulesName,
 			Namespace: "ns-1",
 			Labels: map[string]string{
 				kube.LabelMdaiHubName:   "hub-1",
@@ -579,7 +581,7 @@ func TestProcessAlertingEvent_EndToEnd_Success(t *testing.T) {
 	cfg.SetHubConfigMaps("hub-1", []*corev1.ConfigMap{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "cm-rules",
+				Name:      cmRulesName,
 				Namespace: "ns-1",
 				Labels: map[string]string{
 					kube.LabelMdaiHubName:   "hub-1",
@@ -651,7 +653,7 @@ func TestProcessMdaiEvent_BadPayload(t *testing.T) {
 	require.True(t, ok, "expected FakeConfigMapStore")
 
 	// Rule exists, but payload is bad JSON, so processEventPayload should fail
-	cfg.SeedConfigMap("hub-1", "cm-rules", kube.AutomationConfigMapType, map[string]string{
+	cfg.SeedConfigMap("hub-1", cmRulesName, kube.AutomationConfigMapType, map[string]string{
 		"r1": `{
 		  "name": "r",
 		  "trigger": {"kind":"alert","spec":{"name":"cpu","status":"firing"}},
@@ -678,7 +680,7 @@ func TestProcessMdaiEvent_UnsupportedCommandFromRules(t *testing.T) {
 	cfg, ok := h.ConfigMapController.(*kubetest.FakeConfigMapStore)
 	require.True(t, ok, "expected FakeConfigMapStore")
 
-	cfg.SeedConfigMap("hub-1", "cm-rules", kube.AutomationConfigMapType, map[string]string{
+	cfg.SeedConfigMap("hub-1", cmRulesName, kube.AutomationConfigMapType, map[string]string{
 		"r-bad": `{
 		  "name": "bad",
 		  "trigger": {"kind":"alert","spec":{"name":"disk_full","status":"firing"}},
@@ -719,7 +721,7 @@ func TestProcessTriggerEvent_BadPayload(t *testing.T) {
 	require.True(t, ok, "expected FakeConfigMapStore")
 
 	// Seed one matching variable trigger rule
-	cfg.SeedConfigMap("hub-1", "cm-rules", kube.AutomationConfigMapType, map[string]string{
+	cfg.SeedConfigMap("hub-1", cmRulesName, kube.AutomationConfigMapType, map[string]string{
 		"r1": `{
 		  "name": "rule-on-var-change",
 		  "trigger": { "kind": "variable", "spec": { "name": "my-set", "update_type": "added" } },
