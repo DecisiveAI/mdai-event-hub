@@ -204,6 +204,53 @@ func TestHandleCallSlackWebhook_Success_WithLiteralURL(t *testing.T) {
 	require.Equal(t, "hello", recv.Text)
 }
 
+func TestHandleCallSlackWebhook_TemplateValuesInterpolateTriggerExpressions(t *testing.T) {
+	t.Parallel()
+
+	var (
+		recv       SlackPayload
+		handlerErr error
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if err != nil {
+			handlerErr = err
+			http.Error(w, "read body", http.StatusBadRequest)
+			return
+		}
+		if err := json.Unmarshal(body, &recv); err != nil {
+			handlerErr = err
+			http.Error(w, "bad json", http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	kube := k8sfake.NewClientset()
+
+	// The message template value references the trigger event; HandleCallWebhookFn
+	// interpolates templateValues against the event before building the payload.
+	raw := json.RawMessage(`{
+		"url": {"value": "` + srv.URL + `"},
+		"templateRef": "slackAlertTemplate",
+		"templateValues": {"message": "Alert ${trigger:name} on hub ${trigger:hub_name}"}
+	}`)
+
+	ev := eventing.MdaiEvent{HubName: "prod-hub", Name: "high-cpu.firing"}
+	payload := map[string]any{"status": "firing", "labels": map[string]any{}}
+
+	h := &EventHub{
+		Logger:              zap.NewNop(),
+		InterpolationEngine: interpolation.NewEngine(zap.NewNop()),
+	}
+	require.NoError(t, h.HandleCallWebhookFn(t.Context(), kube, "ns1", ev, raw, payload))
+	require.NoError(t, handlerErr)
+	require.Equal(t, "Alert high-cpu.firing on hub prod-hub", recv.Text)
+}
+
 func TestHandleCallSlackWebhook_Success_WithSecretRef(t *testing.T) {
 	t.Parallel()
 
