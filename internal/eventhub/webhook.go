@@ -60,7 +60,7 @@ func (h *EventHub) HandleCallWebhookFn(ctx context.Context, kube kubernetes.Inte
 	}
 
 	// interpolate template values with event as source before injecting into the payload
-	h.InterpolationEngine.InterpolateMapWithSources(templateValues, &interpolation.TriggerSource{Event: &event})
+	templateValues = h.InterpolationEngine.InterpolateMapWithSources(templateValues, &interpolation.TriggerSource{Event: &event})
 
 	body, err := h.buildPayload(callCtx, kube, namespace, inputAction, event, payloadData, templateValues)
 	if err != nil {
