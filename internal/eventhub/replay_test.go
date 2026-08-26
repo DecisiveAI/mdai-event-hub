@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 )
 
 func TestEventHub_HandleDeployReplay(t *testing.T) {
@@ -153,7 +152,7 @@ func TestEventHub_HandleDeployReplay(t *testing.T) {
 						IgnoreSendingQueue: true,
 						Source: mdaiv1.MdaiReplaySourceConfiguration{
 							AWSConfig: &mdaiv1.MdaiReplayAwsConfig{
-								AWSAccessKeySecret: ptr.To("aws-creds-secret"),
+								AWSAccessKeySecret: new("aws-creds-secret"),
 							},
 							S3: &mdaiv1.MdaiReplayS3Configuration{
 								S3Region:    "eu-west-1",
@@ -190,7 +189,7 @@ func TestEventHub_HandleDeployReplay(t *testing.T) {
 
 				source := spec.Source
 				aws := source.AWSConfig
-				assert.Equal(t, ptr.To("aws-creds-secret"), aws.AWSAccessKeySecret)
+				assert.Equal(t, new("aws-creds-secret"), aws.AWSAccessKeySecret)
 			},
 		},
 		{
